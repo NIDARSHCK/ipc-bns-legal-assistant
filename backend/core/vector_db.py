@@ -2,7 +2,23 @@ import os
 import re
 from typing import Iterable
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(path: str = ".env") -> bool:
+        if not os.path.exists(path):
+            return False
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"\'')
+                os.environ.setdefault(key, value)
+        return True
+
 from pinecone import Pinecone
 
 load_dotenv()
