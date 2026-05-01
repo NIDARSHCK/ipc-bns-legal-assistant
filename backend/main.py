@@ -15,22 +15,17 @@ from database.supabase_db import get_all_history, get_user_from_token, get_user_
 app = FastAPI(title="IPC-BNS Legal Assistant API", version="1.0.0")
 
 frontend_origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "FRONTEND_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
-    ).split(",")
-    if origin.strip()
+    "https://ipc-bns-legal-assistant.vercel.app",
+    "http://localhost:5173",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=frontend_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=5)
@@ -51,9 +46,11 @@ def authenticated_user(authorization: Optional[str]) -> Optional[dict]:
         token = authorization.split(" ", 1)[1]
     return get_user_from_token(token) if token else None
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+
+@app.get("/")
+def root():
+    return {"message": "API Running"}   
+
 
 @app.get("/me")
 def me(authorization: Optional[str] = Header(default=None)) -> dict:
