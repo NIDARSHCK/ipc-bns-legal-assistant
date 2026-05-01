@@ -52,10 +52,9 @@ def authenticated_user(authorization: Optional[str]) -> Optional[dict]:
     return get_user_from_token(token) if token else None
 
 
-@app.get("/health")
-def health() -> dict:
-    return {"status": "ok"}
-
+@app.get("/")
+def root():
+    return {"message": "IPC-BNS Legal Assistant API Running"}
 
 @app.get("/me")
 def me(authorization: Optional[str] = Header(default=None)) -> dict:
