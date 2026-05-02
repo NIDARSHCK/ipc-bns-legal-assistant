@@ -1,6 +1,11 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
-export async function askLegalAssistant({ question, incidentDate, accessToken }) {
+export async function askLegalAssistant({
+  question,
+  incidentDate,
+  forcedEra,
+  accessToken,
+})  {
   const response = await fetch(`${API_BASE_URL}/ask`, {
     method: "POST",
     headers: {
@@ -8,9 +13,10 @@ export async function askLegalAssistant({ question, incidentDate, accessToken })
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
     body: JSON.stringify({
-      question,
-      incident_date: incidentDate,
-    }),
+  question,
+  incident_date: incidentDate,
+  forced_era: forcedEra, 
+}),
   });
 
   const data = await response.json();
