@@ -25,13 +25,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://ipc-bns-legal-assistant-dqdy6vr95-nidarshcks-projects.vercel.app",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=5)
     incident_date: date
