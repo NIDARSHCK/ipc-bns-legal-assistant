@@ -4,6 +4,8 @@ from textwrap import dedent
 import httpx
 from dotenv import load_dotenv
 
+from core.langchain_pipeline import LEGAL_PROMPT
+
 load_dotenv()
 
 

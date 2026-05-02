@@ -55,8 +55,22 @@ def index():
     return pinecone_client().Index(INDEX_NAME)
 
 
-def search_legal_corpus(query: str, namespace: str, top_k: int = 5) -> list[dict]:
+def search_legal_corpus(
+    query: str,
+    namespace: str,
+    top_k: int = 5,
+    exact_section: str | None = None,
+) -> list[dict]:
     act = namespace.upper()
+
+    filter_payload = {
+        "act": {"$eq": act}
+    }
+
+    if exact_section:
+        filter_payload["section"] = {
+            "$eq": exact_section
+        }
     response = index().search(
         namespace=namespace,
         query={
