@@ -30,7 +30,7 @@ class CORSHeadersMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(
     title="IPC-BNS Legal Assistant API",
-    version="2.0.0",
+    version="2.0.1",
 )
 app.add_middleware(
     CORSMiddleware,
