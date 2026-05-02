@@ -22,14 +22,14 @@ app = FastAPI(
     title="IPC-BNS Legal Assistant API",
     version="2.0.0",
 )
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://ipc-bns-legal-assistant.vercel.app",
+        "https://ipc-bns-legal-assistant-dqdy6vr95-nidarshcks-projects.vercel.app",
         "http://localhost:5173",
     ],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
