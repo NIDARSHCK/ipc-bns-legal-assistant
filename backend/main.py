@@ -5,7 +5,6 @@ from typing import Optional
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from core.llm_handler import build_legal_answer
 from core.query_guard import is_legal_query
@@ -19,31 +18,21 @@ from database.supabase_db import (
     save_query,
 )
 
-class CORSHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        response.headers["Access-Control-Allow-Origin"] = "https://ipc-bns-legal-assistant-eo29obwjb-nidarshcks-projects.vercel.app"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        return response
-
 app = FastAPI(
     title="IPC-BNS Legal Assistant API",
     version="2.0.1",
 )
 app.add_middleware(
     CORSMiddleware,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_origins=[
-        "https://ipc-bns-legal-assistant-eo29obwjb-nidarshcks-projects.vercel.app",
         "http://localhost:3000",  # For local development
         "http://localhost:5173",  # For Vite dev server
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
-app.add_middleware(CORSHeadersMiddleware)
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=5)
     incident_date: date
