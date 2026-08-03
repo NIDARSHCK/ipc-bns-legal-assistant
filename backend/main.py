@@ -24,17 +24,17 @@ app = FastAPI(
     version="2.0.1",
 )
 
+origins = (
+    os.getenv("ALLOWED_ORIGINS")
+    or os.getenv("FRONTEND_ORIGINS")
+    or "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173"
+)
+
 allowed_origins = [
     origin.strip().rstrip("/")
-    for origin in (
-        os.getenv("ALLOWED_ORIGINS")
-        or os.getenv("FRONTEND_ORIGINS")
-        or
-        "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173",
-    ).split(",")
+    for origin in origins.split(",")
     if origin.strip()
 ]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https://.*\.vercel\.app",
