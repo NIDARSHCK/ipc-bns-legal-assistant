@@ -19,7 +19,10 @@ except ImportError:
                 os.environ.setdefault(key, value)
         return True
 
-from pinecone import Pinecone
+try:
+    from pinecone import Pinecone
+except ImportError:
+    Pinecone = None
 
 load_dotenv()
 
@@ -33,6 +36,8 @@ def pinecone_client() -> Pinecone:
     api_key = os.getenv("PINECONE_API_KEY")
     if not api_key:
         raise RuntimeError("PINECONE_API_KEY is missing in backend/.env")
+    if Pinecone is None:
+        raise RuntimeError("pinecone package is not installed")
     return Pinecone(api_key=api_key)
 
 
@@ -76,7 +81,7 @@ def search_legal_corpus(
         query={
             "inputs": {"text": query},
             "top_k": top_k,
-            "filter": {"act": {"$eq": act}},
+            "filter": filter_payload,
         },
         fields=["act", "section", "title", "page", TEXT_FIELD],
     )

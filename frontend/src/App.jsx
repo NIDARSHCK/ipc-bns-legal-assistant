@@ -1,290 +1,185 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  ArrowRight,
   BookOpen,
   CalendarDays,
   Check,
+  Gavel,
   History,
-  LayoutDashboard,
+  Loader2,
   LogIn,
   LogOut,
+  Menu,
   Scale,
   Search,
   Send,
   ShieldCheck,
   Sparkles,
   UserPlus,
+  X,
 } from "lucide-react";
 
 import {
   askLegalAssistant,
-  fetchAdminHistory,
   fetchCurrentUser,
   fetchHistory,
+  fetchMappings,
 } from "./services/api";
-
 import { supabase } from "./services/supabase";
 
 const transitionDate = "2024-07-01";
+const demoSession = {
+  access_token: "demo-token",
+  user: { email: "demo@local.test" },
+};
 
 function parseIncidentDate(value) {
   const text = value.trim();
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return { date: text };
-  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return { date: text };
 
   const monthYear = text.match(
     /^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{4})$/i
   );
-
-  if (monthYear) {
-    return { ambiguous: true, label: text };
-  }
+  if (monthYear) return { ambiguous: true, label: text };
 
   const parsed = new Date(text);
-
-  if (!Number.isNaN(parsed.getTime())) {
-    return {
-      date: parsed.toISOString().slice(0, 10),
-    };
-  }
-
-  return {
-    error:
-      "Enter a complete date like 2023-07-14 or 14 July 2023.",
-  };
+  if (!Number.isNaN(parsed.getTime())) return { date: parsed.toISOString().slice(0, 10) };
+  return { error: "Enter a complete date like 2023-07-14 or 14 July 2023." };
 }
 
 export default function App() {
+  const [activeView, setActiveView] = useState("home");
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authMessage, setAuthMessage] = useState("");
-
-  const [question, setQuestion] = useState("");
-  const [incidentDateText, setIncidentDateText] =
-    useState("2024-07-02");
-
-  const [clarifyDate, setClarifyDate] = useState(null);
-
-  // NEW
-  const [showTransitionPopup, setShowTransitionPopup] =
-    useState(false);
-
+  const [question, setQuestion] = useState("What is the BNS equivalent of IPC 420 cheating?");
+  const [incidentDateText, setIncidentDateText] = useState("2024-07-02");
   const [forcedEra, setForcedEra] = useState(null);
-
+  const [clarifyDate, setClarifyDate] = useState(null);
+  const [showTransitionPopup, setShowTransitionPopup] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(false);
-
   const [history, setHistory] = useState([]);
-  const [adminHistory, setAdminHistory] = useState([]);
+  const [mappings, setMappings] = useState([]);
+  const [mappingSearch, setMappingSearch] = useState("");
 
-  const [activeView, setActiveView] = useState("chat");
+  const parsedDate = useMemo(() => parseIncidentDate(incidentDateText), [incidentDateText]);
+  const legalEra = parsedDate.date && parsedDate.date >= transitionDate ? "BNS" : parsedDate.date ? "IPC" : "Needs date";
+  const isSignedIn = Boolean(session?.access_token);
 
-  const parsedDate = useMemo(
-    () => parseIncidentDate(incidentDateText),
-    [incidentDateText]
-  );
-
-  const legalEra = useMemo(() => {
-    if (!parsedDate.date) return "Needs date";
-
-    return parsedDate.date >= transitionDate
-      ? "BNS"
-      : "IPC";
-  }, [parsedDate.date]);
+  useEffect(() => {
+    fetchMappings()
+      .then(setMappings)
+      .catch((err) => setToast(err.message));
+  }, []);
 
   useEffect(() => {
     if (!supabase) return;
-
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setProfile(null);
+      setHistory([]);
     });
-
-    const { data } = supabase.auth.onAuthStateChange(
-      (_event, nextSession) => {
-        setSession(nextSession);
-        setProfile(null);
-        setResult(null);
-        setError("");
-      }
-    );
-
     return () => data.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!session?.access_token) return;
-
     refreshSessionData(session.access_token);
   }, [session?.access_token]);
 
   async function refreshSessionData(accessToken) {
     try {
-      const [userProfile, userHistory] =
-        await Promise.all([
-          fetchCurrentUser(accessToken),
-          fetchHistory(accessToken),
-        ]);
-
+      const [userProfile, userHistory] = await Promise.all([
+        fetchCurrentUser(accessToken),
+        fetchHistory(accessToken),
+      ]);
       setProfile(userProfile);
       setHistory(userHistory);
-
-      if (userProfile.role === "admin") {
-        setAdminHistory(
-          await fetchAdminHistory(accessToken)
-        );
-      }
     } catch (err) {
-      setError(err.message);
+      setToast(err.message);
     }
   }
 
   async function handleAuth(event) {
     event.preventDefault();
-
     if (!supabase) {
-      setAuthMessage(
-        "Add Supabase frontend keys in frontend/.env first."
-      );
+      setAuthMessage("Supabase keys are not configured. Use demo mode for local testing.");
       return;
     }
-
     setAuthMessage("");
-
     const action =
       mode === "signin"
-        ? supabase.auth.signInWithPassword({
-            email,
-            password,
-          })
-        : supabase.auth.signUp({
-            email,
-            password,
-          });
-
+        ? supabase.auth.signInWithPassword({ email, password })
+        : supabase.auth.signUp({ email, password });
     const { error: authError } = await action;
+    if (authError) setAuthMessage(authError.message);
+    if (!authError && mode === "signup") setAuthMessage("Account created. Confirm email if Supabase asks.");
+  }
 
-    if (authError) {
-      setAuthMessage(authError.message);
-    }
-
-    if (!authError && mode === "signup") {
-      setAuthMessage(
-        "Account created. Confirm email if Supabase asks."
-      );
-    }
+  function enterDemoMode() {
+    setSession(demoSession);
+    setProfile({ id: "demo-user", email: "demo@local.test", role: "admin" });
+    setToast("Demo mode enabled. History is stored in backend memory for this server run.");
+    setActiveView("chat");
   }
 
   async function handleSignOut() {
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
-
+    if (supabase && session?.access_token !== "demo-token") await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
     setHistory([]);
-    setAdminHistory([]);
+    setActiveView("home");
   }
 
-  async function submitQuestion(dateOverride) {
-    const incidentDate =
-      dateOverride || parsedDate.date;
-
+  async function submitQuestion(dateOverride, eraOverride) {
+    const incidentDate = dateOverride || parsedDate.date;
+    const era = eraOverride || forcedEra;
     if (!incidentDate) return;
 
     setLoading(true);
     setError("");
     setResult(null);
-
     try {
       const answer = await askLegalAssistant({
         question,
         incidentDate,
-
-        // NEW
-        forcedEra,
-
+        forcedEra: era,
         accessToken: session?.access_token,
       });
-
       setResult(answer);
-
       setQuestion("");
-
-      await refreshSessionData(
-        session.access_token
-      );
+      await refreshSessionData(session.access_token);
+      setToast("Answer generated and saved to history.");
     } catch (err) {
       setError(err.message);
+      setToast(err.message);
     } finally {
       setLoading(false);
-
       setForcedEra(null);
     }
   }
 
   function handleAsk(event) {
     event.preventDefault();
-
-    if (!question.trim()) {
-      setError(
-        "Ask a legal question before sending."
-      );
-
+    if (!isSignedIn) {
+      setToast("Sign in or use demo mode before asking a question.");
+      setActiveView("login");
       return;
     }
-
-    if (parsedDate.ambiguous) {
-      setClarifyDate(parsedDate.label);
-
-      return;
-    }
-
-    if (parsedDate.error) {
-      setError(parsedDate.error);
-
-      return;
-    }
-
-    // NEW
-    if (
-      parsedDate.date === transitionDate &&
-      !forcedEra
-    ) {
-      setShowTransitionPopup(true);
-
-      return;
-    }
-
+    if (!question.trim()) return setError("Ask a legal question before sending.");
+    if (parsedDate.ambiguous) return setClarifyDate(parsedDate.label);
+    if (parsedDate.error) return setError(parsedDate.error);
+    if (parsedDate.date === transitionDate && !forcedEra) return setShowTransitionPopup(true);
     submitQuestion();
-  }
-
-  function resolveAmbiguousDate(choice) {
-    if (choice === "exact") {
-      setClarifyDate(null);
-
-      setError(
-        "Please type the exact incident date, for example 2023-07-14."
-      );
-
-      return;
-    }
-
-    const fallbackDate =
-      choice === "before"
-        ? "2024-06-30"
-        : "2024-07-01";
-
-    setClarifyDate(null);
-
-    setIncidentDateText(fallbackDate);
-
-    submitQuestion(fallbackDate);
   }
 
   function openHistoryItem(item) {
@@ -295,550 +190,231 @@ export default function App() {
       citations: item.citations || [],
       history_id: item.id,
     });
-
     setActiveView("chat");
   }
 
-  if (!session) {
-    return (
-      <main className="login-page">
-        <section className="brand-panel">
-          <div className="brand-mark">
-            <Scale size={30} />
-          </div>
-
-          <span className="eyebrow">
-            IPC to BNS RAG system
-          </span>
-
-          <h1>
-            Grounded legal answers with
-            Supabase history.
-          </h1>
-
-          <p>
-            Sign in to ask date-aware IPC/BNS
-            questions, store consultations,
-            and review source-backed citations.
-          </p>
-        </section>
-
-        <form
-          className="login-card"
-          onSubmit={handleAuth}
-        >
-          <div>
-            <span className="eyebrow">
-              {mode === "signin"
-                ? "Welcome back"
-                : "Create access"}
-            </span>
-
-            <h2>
-              {mode === "signin"
-                ? "Sign in"
-                : "Create account"}
-            </h2>
-          </div>
-
-          <label>
-            Email
-
-            <input
-              value={email}
-              onChange={(event) =>
-                setEmail(event.target.value)
-              }
-              type="email"
-              required
-            />
-          </label>
-
-          <label>
-            Password
-
-            <input
-              value={password}
-              onChange={(event) =>
-                setPassword(event.target.value)
-              }
-              type="password"
-              minLength={6}
-              required
-            />
-          </label>
-
-          <button
-            className="primary-button"
-            type="submit"
-          >
-            {mode === "signin" ? (
-              <LogIn size={18} />
-            ) : (
-              <UserPlus size={18} />
-            )}
-
-            {mode === "signin"
-              ? "Sign in"
-              : "Create account"}
-          </button>
-
-          <button
-            className="link-button"
-            type="button"
-            onClick={() =>
-              setMode(
-                mode === "signin"
-                  ? "signup"
-                  : "signin"
-              )
-            }
-          >
-            {mode === "signin"
-              ? "Need an account? Sign up"
-              : "Already have an account? Sign in"}
-          </button>
-
-          {authMessage && (
-            <p className="message">
-              {authMessage}
-            </p>
-          )}
-        </form>
-      </main>
+  const visibleMappings = useMemo(() => {
+    const q = mappingSearch.toLowerCase().trim();
+    if (!q) return mappings;
+    return mappings.filter((item) =>
+      Object.values(item).some((value) => String(value).toLowerCase().includes(q))
     );
-  }
+  }, [mappings, mappingSearch]);
+
+  const navItems = [
+    ["home", "Home"],
+    ["chat", "Chat"],
+    ["mapping", "Section Mapping"],
+    ["about", "About Us"],
+    ["history", "Chat History"],
+  ];
 
   return (
-    <main className="app-layout">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <Scale size={24} />
+    <main>
+      <header className="topbar">
+        <button className="brand-lockup" onClick={() => setActiveView("home")}>
+          <span className="brand-mark"><Scale size={24} /></span>
+          <span><strong>NyayaSetu</strong><small>IPC to BNS legal transition</small></span>
+        </button>
 
-          <div>
-            <strong>LegalRAG</strong>
+        <button className="menu-button" onClick={() => setMobileOpen(!mobileOpen)}>
+          {mobileOpen ? <X size={21} /> : <Menu size={21} />}
+        </button>
 
-            <span>
-              {profile?.role === "admin"
-                ? "Admin console"
-                : "Judicial assistant"}
-            </span>
-          </div>
-        </div>
-
-        <nav className="nav-stack">
-          <button
-            className={
-              activeView === "chat"
-                ? "active"
-                : ""
-            }
-            onClick={() =>
-              setActiveView("chat")
-            }
-          >
-            <Sparkles size={18} />
-            Chat
-          </button>
-
-          <button
-            className={
-              activeView === "history"
-                ? "active"
-                : ""
-            }
-            onClick={() =>
-              setActiveView("history")
-            }
-          >
-            <History size={18} />
-            History
-          </button>
-
-          {profile?.role === "admin" && (
-            <button
-              className={
-                activeView === "admin"
-                  ? "active"
-                  : ""
-              }
-              onClick={() =>
-                setActiveView("admin")
-              }
-            >
-              <LayoutDashboard size={18} />
-              Admin
+        <nav className={mobileOpen ? "nav-links open" : "nav-links"}>
+          {navItems.map(([id, label]) => (
+            <button key={id} className={activeView === id ? "active" : ""} onClick={() => { setActiveView(id); setMobileOpen(false); }}>
+              {label}
             </button>
+          ))}
+          {isSignedIn ? (
+            <button className="nav-auth" onClick={handleSignOut}><LogOut size={16} /> Sign out</button>
+          ) : (
+            <button className="nav-auth" onClick={() => setActiveView("login")}><LogIn size={16} /> Sign Up / Login</button>
           )}
         </nav>
+      </header>
 
-        <div className="account-box">
-          <span>{session.user.email}</span>
-
-          <button onClick={handleSignOut}>
-            <LogOut size={16} />
-            Sign out
-          </button>
-        </div>
-      </aside>
-
-      <section className="main-panel">
-        <header className="app-header">
-          <div>
-            <span className="eyebrow">
-              Date-aware retrieval
-            </span>
-
-            <h1>
-              IPC-BNS Legal Assistant
-            </h1>
-          </div>
-
-          <div
-            className={`era-pill ${legalEra
-              .toLowerCase()
-              .replace(" ", "-")}`}
-          >
-            <ShieldCheck size={18} />
-            {legalEra}
-          </div>
-        </header>
-
-        {activeView === "chat" && (
-          <section className="chat-grid">
-            <form
-              className="composer"
-              onSubmit={handleAsk}
-            >
-              <label>
-                <span>
-                  <CalendarDays size={17} />
-                  Incident date
-                </span>
-
-                <input
-                  value={incidentDateText}
-                  onChange={(event) =>
-                    setIncidentDateText(
-                      event.target.value
-                    )
-                  }
-                  placeholder="2024-07-02 or 2 July 2024"
-                  required
-                />
-              </label>
-
-              <label>
-                <span>
-                  <BookOpen size={17} />
-                  Legal question
-                </span>
-
-                <textarea
-                  value={question}
-                  onChange={(event) =>
-                    setQuestion(
-                      event.target.value
-                    )
-                  }
-                  placeholder="Ask about IPC/BNS sections, FIR, bail, offence mapping, punishment, or procedure..."
-                  rows={7}
-                  required
-                />
-              </label>
-
-              <button
-                className="primary-button"
-                disabled={loading}
-                type="submit"
-              >
-                <Send size={18} />
-
-                {loading
-                  ? "Searching legal sources..."
-                  : "Send question"}
-              </button>
-            </form>
-
-            <section className="response-surface">
-              {!result && !error && (
-                <div className="empty-state">
-                  <Search size={34} />
-
-                  <h2>
-                    Ask a legal question to
-                    begin.
-                  </h2>
-
-                  <p>
-                    The backend blocks
-                    non-legal queries,
-                    filters by incident
-                    date, and only answers
-                    when Pinecone has a
-                    strong source match.
-                  </p>
-                </div>
-              )}
-
-              {error && (
-                <div className="notice error">
-                  <AlertCircle size={20} />
-
-                  <p>{error}</p>
-                </div>
-              )}
-
-              {result && (
-                <article className="answer-panel">
-                  <div className="answer-meta">
-                    <span>
-                      Routed to{" "}
-                      {result.legal_era}
-                    </span>
-
-                    <span>
-                      Namespace:{" "}
-                      {result.namespace}
-                    </span>
-
-                    {result.history_id && (
-                      <span>Saved</span>
-                    )}
-                  </div>
-
-                  <pre>{result.answer}</pre>
-
-                  <div className="citations">
-                    {result.citations.map(
-                      (citation) => (
-                        <article
-                          key={
-                            citation.id ||
-                            `${citation.section}-${citation.page}`
-                          }
-                        >
-                          <strong>
-                            {citation.act}{" "}
-                            Section{" "}
-                            {citation.section}
-                          </strong>
-
-                          <span>
-                            Score:{" "}
-                            {Number(
-                              citation.score || 0
-                            ).toFixed(3)}{" "}
-                            | Gazette page:{" "}
-                            {citation.page}
-                          </span>
-
-                          <p>
-                            {citation.text}
-                          </p>
-                        </article>
-                      )
-                    )}
-                  </div>
-                </article>
-              )}
-            </section>
-          </section>
-        )}
-
-        {activeView === "history" && (
-          <HistoryList
-            title="Your Chat History"
-            items={history}
-            onOpen={openHistoryItem}
-          />
-        )}
-
-        {activeView === "admin" &&
-          profile?.role === "admin" && (
-            <HistoryList
-              title="Admin: All User Queries"
-              items={adminHistory}
-              onOpen={openHistoryItem}
-              showUser
-            />
-          )}
-      </section>
-
-      {/* NEW TRANSITION POPUP */}
+      {activeView === "home" && <Landing onStart={() => setActiveView(isSignedIn ? "chat" : "login")} onMap={() => setActiveView("mapping")} />}
+      {activeView === "about" && <About />}
+      {activeView === "login" && <AuthPanel mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} handleAuth={handleAuth} authMessage={authMessage} enterDemoMode={enterDemoMode} />}
+      {activeView === "chat" && <ChatView legalEra={legalEra} incidentDateText={incidentDateText} setIncidentDateText={setIncidentDateText} question={question} setQuestion={setQuestion} handleAsk={handleAsk} loading={loading} result={result} error={error} signedIn={isSignedIn} onLogin={() => setActiveView("login")} />}
+      {activeView === "history" && <HistoryList items={history} onOpen={openHistoryItem} signedIn={isSignedIn} onLogin={() => setActiveView("login")} />}
+      {activeView === "mapping" && <MappingTable mappings={visibleMappings} query={mappingSearch} setQuery={setMappingSearch} />}
 
       {showTransitionPopup && (
-        <div className="modal-backdrop">
-          <section className="modal">
-            <div className="modal-icon">
-              <Scale size={24} />
-            </div>
-
-            <h2>
-              Legal Transition Date Detected
-            </h2>
-
-            <p>
-              July 1, 2024 is the IPC →
-              BNS transition date.
-              Choose which legal framework
-              should be used.
-            </p>
-
-            <div className="modal-actions">
-              <button
-                className="ghost-button"
-                onClick={() => {
-                  setForcedEra("IPC");
-
-                  setShowTransitionPopup(
-                    false
-                  );
-
-                  submitQuestion(
-                    "2024-07-01"
-                  );
-                }}
-              >
-                Use IPC
-              </button>
-
-              <button
-                className="primary-button compact"
-                onClick={() => {
-                  setForcedEra("BNS");
-
-                  setShowTransitionPopup(
-                    false
-                  );
-
-                  submitQuestion(
-                    "2024-07-01"
-                  );
-                }}
-              >
-                <Check size={17} />
-                Use BNS
-              </button>
-            </div>
-          </section>
-        </div>
+        <Modal icon={<Scale size={24} />} title="Legal Transition Date Detected">
+          <p>July 1, 2024 is the IPC to BNS transition date. Choose which legal framework should be used for this query.</p>
+          <div className="modal-actions two">
+            <button className="ghost-button" onClick={() => { setShowTransitionPopup(false); submitQuestion("2024-07-01", "IPC"); }}>Use IPC</button>
+            <button className="primary-button" onClick={() => { setShowTransitionPopup(false); submitQuestion("2024-07-01", "BNS"); }}><Check size={17} />Use BNS</button>
+          </div>
+        </Modal>
       )}
 
       {clarifyDate && (
-        <div className="modal-backdrop">
-          <section className="modal">
-            <div className="modal-icon">
-              <CalendarDays size={24} />
-            </div>
-
-            <h2>
-              Exact incident date needed
-            </h2>
-
-            <p>
-              You entered "
-              {clarifyDate}
-              ". The IPC/BNS route
-              depends on the exact
-              incident date. Enter a
-              precise date, or choose
-              whether the incident was
-              before or after 1 July
-              2024.
-            </p>
-
-            <div className="modal-actions">
-              <button
-                className="ghost-button"
-                onClick={() =>
-                  resolveAmbiguousDate(
-                    "before"
-                  )
-                }
-              >
-                Before 1 July 2024
-              </button>
-
-              <button
-                className="ghost-button"
-                onClick={() =>
-                  resolveAmbiguousDate(
-                    "after"
-                  )
-                }
-              >
-                On/after 1 July 2024
-              </button>
-
-              <button
-                className="primary-button compact"
-                onClick={() =>
-                  resolveAmbiguousDate(
-                    "exact"
-                  )
-                }
-              >
-                <Check size={17} />
-                I will enter exact date
-              </button>
-            </div>
-          </section>
-        </div>
+        <Modal icon={<CalendarDays size={24} />} title="Exact incident date needed">
+          <p>You entered "{clarifyDate}". The IPC/BNS route depends on the exact incident date.</p>
+          <div className="modal-actions">
+            <button className="ghost-button" onClick={() => { setClarifyDate(null); setIncidentDateText("2024-06-30"); submitQuestion("2024-06-30"); }}>Before 1 July 2024</button>
+            <button className="ghost-button" onClick={() => { setClarifyDate(null); setIncidentDateText("2024-07-01"); submitQuestion("2024-07-01"); }}>On/after 1 July 2024</button>
+            <button className="primary-button" onClick={() => { setClarifyDate(null); setError("Please type the exact incident date, for example 2023-07-14."); }}><Check size={17} />Enter exact date</button>
+          </div>
+        </Modal>
       )}
+
+      {toast && <button className="toast" onClick={() => setToast("")}>{toast}</button>}
     </main>
   );
 }
 
-function HistoryList({
-  title,
-  items,
-  onOpen,
-  showUser = false,
-}) {
+function Landing({ onStart, onMap }) {
   return (
-    <section className="history-page">
-      <div className="section-title">
-        <span className="eyebrow">
-          {items.length} saved queries
-        </span>
+    <>
+      <section className="hero">
+        <div className="hero-content">
+          <span className="eyebrow">Legal power of law, rebuilt for the IPC to BNS transition</span>
+          <h1>IPC to BNS Legal Transition Assistant</h1>
+          <p>Ask date-aware questions, retrieve grounded citations, and compare high-impact IPC provisions with their BNS equivalents in a polished legal-tech workspace.</p>
+          <div className="hero-actions">
+            <button className="primary-button" onClick={onStart}>Start legal chat <ArrowRight size={18} /></button>
+            <button className="ghost-button dark" onClick={onMap}>Browse mappings</button>
+          </div>
+        </div>
+      </section>
+      <section className="feature-band">
+        {[
+          [<Sparkles size={22} />, "RAG chatbot", "Retrieves IPC/BNS context, routes by incident date, and returns source citations."],
+          [<BookOpen size={22} />, "Section mapping", "Search the top 50 practical IPC to BNS transitions for common offences."],
+          [<ShieldCheck size={22} />, "Production path", "Supabase auth/history, Pinecone vectors, env-based CORS, and deploy-ready APIs."],
+        ].map(([icon, title, copy]) => (
+          <article className="feature-card" key={title}>{icon}<h2>{title}</h2><p>{copy}</p></article>
+        ))}
+      </section>
+    </>
+  );
+}
 
-        <h2>{title}</h2>
+function AuthPanel(props) {
+  return (
+    <section className="auth-page">
+      <div className="auth-copy">
+        <span className="eyebrow">Secure workspace</span>
+        <h1>Sign in for saved legal research history.</h1>
+        <p>Use Supabase credentials in production, or enter demo mode to test the full local flow without cloud keys.</p>
       </div>
+      <form className="auth-card" onSubmit={props.handleAuth}>
+        <h2>{props.mode === "signin" ? "Sign in" : "Create account"}</h2>
+        <label>Email<input value={props.email} onChange={(event) => props.setEmail(event.target.value)} type="email" required /></label>
+        <label>Password<input value={props.password} onChange={(event) => props.setPassword(event.target.value)} type="password" minLength={6} required /></label>
+        <button className="primary-button" type="submit">{props.mode === "signin" ? <LogIn size={18} /> : <UserPlus size={18} />}{props.mode === "signin" ? "Sign in" : "Create account"}</button>
+        <button className="ghost-button" type="button" onClick={props.enterDemoMode}>Use local demo mode</button>
+        <button className="link-button" type="button" onClick={() => props.setMode(props.mode === "signin" ? "signup" : "signin")}>{props.mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}</button>
+        {props.authMessage && <p className="message">{props.authMessage}</p>}
+      </form>
+    </section>
+  );
+}
 
+function ChatView({ legalEra, incidentDateText, setIncidentDateText, question, setQuestion, handleAsk, loading, result, error, signedIn, onLogin }) {
+  return (
+    <section className="workspace">
+      <div className="section-heading">
+        <span className="eyebrow">Date-aware retrieval</span>
+        <h1>Chat with the IPC-BNS assistant</h1>
+      </div>
+      {!signedIn && <div className="notice"><AlertCircle size={20} /><p>Sign in or use demo mode to ask questions.</p><button className="ghost-button" onClick={onLogin}>Open login</button></div>}
+      <div className="chat-grid">
+        <form className="composer" onSubmit={handleAsk}>
+          <div className={`era-pill ${legalEra.toLowerCase().replace(" ", "-")}`}><ShieldCheck size={18} />{legalEra}</div>
+          <label><span><CalendarDays size={17} />Incident date</span><input value={incidentDateText} onChange={(event) => setIncidentDateText(event.target.value)} required /></label>
+          <label><span><BookOpen size={17} />Legal question</span><textarea value={question} onChange={(event) => setQuestion(event.target.value)} rows={8} required /></label>
+          <button className="primary-button" disabled={loading} type="submit">{loading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}{loading ? "Searching sources..." : "Send question"}</button>
+        </form>
+        <section className="response-surface">
+          {!result && !error && <div className="empty-state"><Search size={34} /><h2>Ask about a section, offence, punishment, or transition.</h2><p>Answers include the applicable legal era, citations, and mapped IPC/BNS references where available.</p></div>}
+          {error && <div className="notice error"><AlertCircle size={20} /><p>{error}</p></div>}
+          {result && <Answer result={result} />}
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function Answer({ result }) {
+  return (
+    <article className="answer-panel">
+      <div className="answer-meta"><span>{result.legal_era}</span><span>Namespace: {result.namespace}</span>{result.history_id && <span>Saved</span>}</div>
+      <pre>{result.answer}</pre>
+      <div className="citations">
+        {(result.citations || []).map((citation) => (
+          <article key={citation.id || `${citation.act}-${citation.section}`}>
+            <strong>{citation.act} Section {citation.section}: {citation.title}</strong>
+            <span>Score: {Number(citation.score || 0).toFixed(3)} | Source page: {citation.page}</span>
+            <p>{citation.text}</p>
+          </article>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function MappingTable({ mappings, query, setQuery }) {
+  return (
+    <section className="workspace">
+      <div className="section-heading split">
+        <div><span className="eyebrow">{mappings.length} visible mappings</span><h1>IPC to BNS Section Mapping</h1></div>
+        <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search murder, 420, cheating, theft..." /></label>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>IPC Section</th><th>IPC Title</th><th>BNS Section</th><th>BNS Title</th><th>Key Changes / Notes</th></tr></thead>
+          <tbody>{mappings.map((item) => <tr key={`${item.ipc_section}-${item.bns_section}`}><td>{item.ipc_section}</td><td>{item.ipc_title}</td><td>{item.bns_section}</td><td>{item.bns_title}</td><td>{item.notes}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function HistoryList({ items, onOpen, signedIn, onLogin }) {
+  return (
+    <section className="workspace narrow">
+      <div className="section-heading"><span className="eyebrow">{items.length} saved queries</span><h1>Chat History</h1></div>
+      {!signedIn && <div className="notice"><History size={20} /><p>Sign in or enter demo mode to view chat history.</p><button className="ghost-button" onClick={onLogin}>Open login</button></div>}
       <div className="history-list">
-        {items.length === 0 && (
-          <p className="muted">
-            No saved queries yet.
-          </p>
-        )}
-
+        {signedIn && items.length === 0 && <p className="muted">No saved queries yet.</p>}
         {items.map((item) => (
-          <button
-            key={item.id}
-            className="history-item"
-            onClick={() => onOpen(item)}
-          >
-            <strong>
-              {item.question}
-            </strong>
-
-            <span>
-              {item.legal_era} |
-              {item.incident_date} |
-              {new Date(
-                item.created_at
-              ).toLocaleString()}
-            </span>
-
-            {showUser && (
-              <small>
-                User: {item.user_id}
-              </small>
-            )}
+          <button key={item.id} className="history-item" onClick={() => onOpen(item)}>
+            <strong>{item.question}</strong>
+            <span>{item.legal_era} | {item.incident_date} | {new Date(item.created_at).toLocaleString()}</span>
           </button>
         ))}
       </div>
     </section>
+  );
+}
+
+function About() {
+  return (
+    <section className="about-page">
+      <div className="section-heading"><span className="eyebrow">About Us</span><h1>Built for advocates, students, and legal teams navigating India’s criminal law transition.</h1></div>
+      <div className="about-grid">
+        <article><Gavel size={26} /><h2>Purpose</h2><p>NyayaSetu explains whether IPC or BNS applies based on incident date, then anchors answers to retrieved legal text and curated mappings.</p></article>
+        <article><ShieldCheck size={26} /><h2>Guardrails</h2><p>The assistant is designed for legal information, not legal advice. It refuses non-legal prompts and highlights source limitations.</p></article>
+        <article><Scale size={26} /><h2>Architecture</h2><p>React, FastAPI, Supabase, Pinecone, and deploy-ready environment configuration keep the project aligned with production workflows.</p></article>
+      </div>
+    </section>
+  );
+}
+
+function Modal({ icon, title, children }) {
+  return (
+    <div className="modal-backdrop">
+      <section className="modal">
+        <div className="modal-icon">{icon}</div>
+        <h2>{title}</h2>
+        {children}
+      </section>
+    </div>
   );
 }

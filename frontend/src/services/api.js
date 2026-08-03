@@ -6,7 +6,7 @@ export async function askLegalAssistant({
   forcedEra,
   accessToken,
 })  {
-  const response = await fetch(`${API_BASE_URL}/ask`, {
+  const response = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -24,6 +24,13 @@ export async function askLegalAssistant({
     throw new Error(data.detail || "The legal assistant could not answer right now.");
   }
   return data;
+}
+
+export async function fetchMappings() {
+  const response = await fetch(`${API_BASE_URL}/mapping`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "Could not load section mappings.");
+  return data.items || [];
 }
 
 export async function fetchCurrentUser(accessToken) {

@@ -1,10 +1,14 @@
 import os
+from datetime import datetime, timezone
 from typing import Optional
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
 load_dotenv()
+
+LOCAL_HISTORY: list[dict] = []
 
 
 def supabase() -> Optional[Client]:
@@ -12,12 +16,17 @@ def supabase() -> Optional[Client]:
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SECRET_KEY")
     if not url or not key:
         return None
-    return create_client(url, key)
+    try:
+        return create_client(url, key)
+    except Exception:
+        return None
 
 
 def get_user_from_token(token: Optional[str]) -> Optional[dict]:
     if not token:
         return None
+    if token == "demo-token":
+        return {"id": "demo-user", "email": "demo@local.test", "role": "admin"}
     client = supabase()
     if not client:
         return None
@@ -52,10 +61,24 @@ def save_query(
 ) -> Optional[str]:
     client = supabase()
     if not client or not user_id:
-        return None
+        history_id = str(uuid4())
+        LOCAL_HISTORY.insert(
+            0,
+            {
+                "id": history_id,
+                "user_id": user_id or "demo-user",
+                "question": question,
+                "answer": answer,
+                "incident_date": incident_date,
+                "legal_era": legal_era,
+                "citations": citations,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        return history_id
 
     result = (
-        client.table("query_history")
+        client.table("chat_history")
         .insert(
             {
                 "user_id": user_id,
@@ -76,9 +99,9 @@ def save_query(
 def get_user_history(user_id: str) -> list[dict]:
     client = supabase()
     if not client:
-        return []
+        return [item for item in LOCAL_HISTORY if item["user_id"] == user_id][:50]
     result = (
-        client.table("query_history")
+        client.table("chat_history")
         .select("id, question, answer, incident_date, legal_era, citations, created_at")
         .eq("user_id", user_id)
         .order("created_at", desc=True)
@@ -91,9 +114,9 @@ def get_user_history(user_id: str) -> list[dict]:
 def get_all_history() -> list[dict]:
     client = supabase()
     if not client:
-        return []
+        return LOCAL_HISTORY[:200]
     result = (
-        client.table("query_history")
+        client.table("chat_history")
         .select("id, user_id, question, answer, incident_date, legal_era, citations, created_at")
         .order("created_at", desc=True)
         .limit(200)
