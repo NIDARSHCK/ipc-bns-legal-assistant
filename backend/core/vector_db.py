@@ -30,6 +30,7 @@ load_dotenv()
 INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "legal-assistant")
 TEXT_FIELD = "chunk_text"
 MIN_MATCH_SCORE = float(os.getenv("PINECONE_MIN_MATCH_SCORE", "0.45"))
+EMBED_MODEL = os.getenv("PINECONE_EMBED_MODEL", "llama-text-embed-v2")
 
 
 def pinecone_client() -> Pinecone:
@@ -76,26 +77,38 @@ def search_legal_corpus(
         filter_payload["section"] = {
             "$eq": exact_section
         }
-    response = index().search(
-        namespace=namespace,
-        query={
-            "inputs": {"text": query},
-            "top_k": top_k,
-            "filter": filter_payload,
-        },
-        fields=["act", "section", "title", "page", TEXT_FIELD],
-    )
+    idx = index()
+    if hasattr(idx, "search"):
+        response = idx.search(
+            namespace=namespace,
+            query={
+                "inputs": {"text": query},
+                "top_k": top_k,
+                "filter": filter_payload,
+            },
+            fields=["act", "section", "title", "page", TEXT_FIELD],
+        )
+        hits = response.get("result", {}).get("hits", [])
+    else:
+        vector = embed_texts([query], input_type="query")[0]
+        response = idx.query(
+            namespace=namespace,
+            vector=vector,
+            top_k=top_k,
+            include_metadata=True,
+            filter=filter_payload,
+        )
+        hits = response.get("matches", [])
 
-    hits = response.get("result", {}).get("hits", [])
     results = []
     for hit in hits:
-        score = hit.get("_score") or 0
+        score = hit.get("_score") or hit.get("score") or 0
         if score < MIN_MATCH_SCORE:
             continue
-        fields = hit.get("fields", {})
+        fields = hit.get("fields") or hit.get("metadata") or {}
         results.append(
             {
-                "id": hit.get("_id"),
+                "id": hit.get("_id") or hit.get("id"),
                 "score": score,
                 "act": fields.get("act"),
                 "section": fields.get("section"),
@@ -112,7 +125,7 @@ def upsert_chunks(namespace: str, chunks: Iterable[dict]) -> None:
     for chunk in chunks:
         records.append(
             {
-                "_id": chunk["id"],
+                "id": chunk["id"],
                 TEXT_FIELD: chunk["text"],
                 "act": chunk.get("act", namespace.upper()),
                 "section": chunk.get("section", "unknown"),
@@ -122,7 +135,41 @@ def upsert_chunks(namespace: str, chunks: Iterable[dict]) -> None:
         )
 
     if records:
-        index().upsert_records(namespace, records)
+        idx = index()
+        if hasattr(idx, "upsert_records"):
+            idx.upsert_records(namespace, [{"_id": item["id"], **{k: v for k, v in item.items() if k != "id"}} for item in records])
+            return
+
+        batch_size = 32
+        for start in range(0, len(records), batch_size):
+            batch = records[start : start + batch_size]
+            vectors = embed_texts([item[TEXT_FIELD] for item in batch], input_type="passage")
+            idx.upsert(
+                namespace=namespace,
+                vectors=[
+                    {
+                        "id": item["id"],
+                        "values": values,
+                        "metadata": {
+                            "act": item["act"],
+                            "section": item["section"],
+                            "title": item["title"],
+                            "page": item["page"],
+                            TEXT_FIELD: item[TEXT_FIELD],
+                        },
+                    }
+                    for item, values in zip(batch, vectors)
+                ],
+            )
+
+
+def embed_texts(texts: list[str], input_type: str) -> list[list[float]]:
+    response = pinecone_client().inference.embed(
+        model=EMBED_MODEL,
+        inputs=texts,
+        parameters={"input_type": input_type},
+    )
+    return [item["values"] for item in response.data]
 
 
 def detect_section(text: str) -> str:
