@@ -25,9 +25,11 @@ app = FastAPI(
 )
 
 allowed_origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "ALLOWED_ORIGINS",
+    origin.strip().rstrip("/")
+    for origin in (
+        os.getenv("ALLOWED_ORIGINS")
+        or os.getenv("FRONTEND_ORIGINS")
+        or
         "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173",
     ).split(",")
     if origin.strip()
