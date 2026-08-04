@@ -1,7 +1,7 @@
 # Environment secrets
-.env
-backend/.env
-frontend/.env
+#.env
+#backend/.env
+#frontend/.env
 
 # Frontend dependencies and build output
 node_modules/
