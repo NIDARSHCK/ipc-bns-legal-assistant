@@ -63,52 +63,68 @@ def index():
 
 def search_legal_corpus(
     query: str,
-    namespace: str,
+    namespace: str | None = None,
     top_k: int = 5,
     exact_section: str | None = None,
 ) -> list[dict]:
-    act = namespace.upper()
-
-    filter_payload = {
-        "act": {"$eq": act}
-    }
-
-    if exact_section:
-        filter_payload["section"] = {
-            "$eq": exact_section
-        }
     idx = index()
-    if hasattr(idx, "search"):
-        response = idx.search(
-            namespace=namespace,
-            query={
-                "inputs": {"text": query},
-                "top_k": top_k,
-                "filter": filter_payload,
-            },
-            fields=["act", "section", "title", "page", TEXT_FIELD],
-        )
-        hits = response.get("result", {}).get("hits", [])
-    else:
+    # Search both namespaces to support automatic cross-referencing where appropriate
+    namespaces_to_search = ["ipc", "bns"]
+    
+    all_hits = []
+    vector = None
+    if not hasattr(idx, "search"):
         vector = embed_texts([query], input_type="query")[0]
-        response = idx.query(
-            namespace=namespace,
-            vector=vector,
-            top_k=top_k,
-            include_metadata=True,
-            filter=filter_payload,
-        )
-        hits = response.get("matches", [])
+
+    for ns in namespaces_to_search:
+        act = ns.upper()
+        
+        # 1. Exact section search
+        if exact_section:
+            filter_exact = {"act": {"$eq": act}, "section": {"$eq": exact_section}}
+            if hasattr(idx, "search"):
+                response = idx.search(
+                    namespace=ns,
+                    query={"inputs": {"text": query}, "top_k": top_k, "filter": filter_exact},
+                    fields=["act", "section", "title", "page", TEXT_FIELD],
+                )
+                all_hits.extend(response.get("result", {}).get("hits", []))
+            else:
+                response = idx.query(
+                    namespace=ns, vector=vector, top_k=top_k, include_metadata=True, filter=filter_exact
+                )
+                all_hits.extend(response.get("matches", []))
+                
+        # 2. Semantic search
+        filter_semantic = {"act": {"$eq": act}}
+        if hasattr(idx, "search"):
+            response = idx.search(
+                namespace=ns,
+                query={"inputs": {"text": query}, "top_k": top_k, "filter": filter_semantic},
+                fields=["act", "section", "title", "page", TEXT_FIELD],
+            )
+            all_hits.extend(response.get("result", {}).get("hits", []))
+        else:
+            response = idx.query(
+                namespace=ns, vector=vector, top_k=top_k, include_metadata=True, filter=filter_semantic
+            )
+            all_hits.extend(response.get("matches", []))
 
     results = []
-    for hit in hits:
+    seen_ids = set()
+    for hit in all_hits:
+        hit_id = hit.get("_id") or hit.get("id")
+        if hit_id in seen_ids:
+            continue
+        seen_ids.add(hit_id)
+        
         score = hit.get("_score") or hit.get("score") or 0
         if score < MIN_MATCH_SCORE:
             continue
         fields = hit.get("fields") or hit.get("metadata") or {}
         results.append(
             {
-                "id": hit.get("_id") or hit.get("id"),
+                "id": hit_id,
                 "score": score,
                 "act": fields.get("act"),
                 "section": fields.get("section"),
@@ -117,7 +133,9 @@ def search_legal_corpus(
                 "text": fields.get(TEXT_FIELD),
             }
         )
-    return results
+        
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results[:top_k]
 
 
 def upsert_chunks(namespace: str, chunks: Iterable[dict]) -> None:
@@ -172,6 +190,3 @@ def embed_texts(texts: list[str], input_type: str) -> list[list[float]]:
     return [item["values"] for item in response.data]
 
 
-def detect_section(text: str) -> str:
-    match = re.search(r"\b(?:section|sec\.?)\s+([0-9A-Za-z-]+)", text, flags=re.I)
-    return match.group(1) if match else "unknown"

@@ -3,8 +3,6 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from core.vector_db import detect_section
-
 
 def read_document(path: str) -> str:
     file_path = Path(path)
@@ -22,11 +20,24 @@ def read_document(path: str) -> str:
     return file_path.read_text(encoding="utf-8")
 
 
+def detect_section(text: str) -> str:
+    match = re.search(r"\b(?:section|sec\.?)\s+([0-9A-Za-z-]+)", text, flags=re.I)
+    if match:
+        return match.group(1)
+    
+    match2 = re.search(r"\b([0-9]+[A-Z]?)\.\s+[A-Z]", text)
+    if match2:
+        return match2.group(1)
+        
+    return "unknown"
+
+
 def split_into_chunks(text: str, act: str, source_name: str, max_chars: int = 1400) -> list[dict]:
     normalized = re.sub(r"\s+", " ", text).strip()
     pieces = []
     start = 0
     counter = 1
+    current_section = "unknown"
 
     while start < len(normalized):
         end = min(start + max_chars, len(normalized))
@@ -38,13 +49,18 @@ def split_into_chunks(text: str, act: str, source_name: str, max_chars: int = 14
         chunk_text = normalized[start:end].strip()
         if chunk_text:
             section = detect_section(chunk_text)
+            if section != "unknown":
+                current_section = section
+            elif current_section != "unknown":
+                section = current_section
+            
             pieces.append(
                 {
                     "id": f"{act.lower()}-{source_name}-{counter}",
                     "text": chunk_text,
                     "act": act.upper(),
                     "section": section,
-                    "title": f"{act.upper()} source chunk {counter}",
+                    "title": f"{act.upper()} Section {section} chunk {counter}",
                     "page": _page_hint(chunk_text),
                 }
             )

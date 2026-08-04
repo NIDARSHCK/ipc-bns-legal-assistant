@@ -57,41 +57,6 @@ class AskResponse(BaseModel):
     history_id: Optional[str] = None
 
 
-def build_demo_retrieval(question: str, legal_era: str, namespace: str, exact_section: str | None) -> list[dict]:
-    mapping = find_mapping_for_query(question, legal_era)
-    if exact_section:
-        mapping = next(
-            (
-                item
-                for item in get_mappings()
-                if item["ipc_section"] == exact_section or item["bns_section"] == exact_section
-            ),
-            mapping,
-        )
-    if not mapping:
-        mapping = get_mappings()[0]
-
-    section = mapping["bns_section"] if legal_era == "BNS" else mapping["ipc_section"]
-    title = mapping["bns_title"] if legal_era == "BNS" else mapping["ipc_title"]
-    other_act = "IPC" if legal_era == "BNS" else "BNS"
-    other_section = mapping["ipc_section"] if legal_era == "BNS" else mapping["bns_section"]
-
-    return [
-        {
-            "id": f"demo-{namespace}-{section}",
-            "score": 0.91,
-            "act": legal_era,
-            "section": section,
-            "title": title,
-            "page": "demo",
-            "text": (
-                f"{legal_era} Section {section}: {title}. "
-                f"Transition note: the corresponding {other_act} provision is Section {other_section}. "
-                f"{mapping['notes']}"
-            ),
-        }
-    ]
-
 
 def build_fallback_answer(question: str, incident_date: str, legal_era: str, retrieved: list[dict]) -> str:
     primary = retrieved[0]
@@ -220,19 +185,11 @@ async def ask_legal_question(
         exact_section = section_match.group(1)
 
     try:
-        try:
-            retrieved = search_legal_corpus(
-                payload.question,
-                namespace=namespace,
-                exact_section=exact_section,
-            )
-        except Exception:
-            retrieved = build_demo_retrieval(
-                payload.question,
-                legal_era=legal_era,
-                namespace=namespace,
-                exact_section=exact_section,
-            )
+        retrieved = search_legal_corpus(
+            payload.question,
+            namespace=None, # Allow searching across both namespaces
+            exact_section=exact_section,
+        )
 
         if not retrieved:
             raise HTTPException(
@@ -256,25 +213,22 @@ async def ask_legal_question(
             )
 
         # Relational Mapping
-        mapped_section = None
-
+        mapping = None
         if exact_section:
-            mapped_section = get_equivalent_section(
-                exact_section,
-                legal_era,
-            )
+            mapping = next((item for item in get_mappings() if item["ipc_section"] == exact_section or item["bns_section"] == exact_section), None)
+            
+        if not mapping:
+            mapping = find_mapping_for_query(payload.question, legal_era)
 
-        if mapped_section:
+        if mapping:
+            ipc_sec = mapping["ipc_section"]
+            bns_sec = mapping["bns_section"]
+            title = mapping["bns_title"] if legal_era == "BNS" else mapping["ipc_title"]
+            
             if legal_era == "IPC":
-                answer += (
-                    f"\n\nEquivalent provision under BNS: "
-                    f"Section {mapped_section}"
-                )
+                answer += f"\n\n**Section Mapping:** IPC Section {ipc_sec} maps to **BNS Section {bns_sec}** ({title}). Note: {mapping['notes']}"
             else:
-                answer += (
-                    f"\n\nEquivalent provision under IPC: "
-                    f"Section {mapped_section}"
-                )
+                answer += f"\n\n**Section Mapping:** BNS Section {bns_sec} maps to **IPC Section {ipc_sec}** ({title}). Note: {mapping['notes']}"
 
     except HTTPException:
         raise

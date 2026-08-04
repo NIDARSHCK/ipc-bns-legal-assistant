@@ -29,10 +29,6 @@ import {
 import { supabase } from "./services/supabase";
 
 const transitionDate = "2024-07-01";
-const demoSession = {
-  access_token: "demo-token",
-  user: { email: "demo@local.test" },
-};
 
 function parseIncidentDate(value) {
   const text = value.trim();
@@ -49,7 +45,7 @@ function parseIncidentDate(value) {
 }
 
 export default function App() {
-  const [activeView, setActiveView] = useState("home");
+  const [activeView, setActiveView] = useState("login");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
@@ -67,18 +63,10 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [mappings, setMappings] = useState([]);
-  const [mappingSearch, setMappingSearch] = useState("");
 
   const parsedDate = useMemo(() => parseIncidentDate(incidentDateText), [incidentDateText]);
   const legalEra = parsedDate.date && parsedDate.date >= transitionDate ? "BNS" : parsedDate.date ? "IPC" : "Needs date";
   const isSignedIn = Boolean(session?.access_token);
-
-  useEffect(() => {
-    fetchMappings()
-      .then(setMappings)
-      .catch((err) => setToast(err.message));
-  }, []);
 
   useEffect(() => {
     if (!supabase) return;
@@ -125,19 +113,12 @@ export default function App() {
     if (!authError && mode === "signup") setAuthMessage("Account created. Confirm email if Supabase asks.");
   }
 
-  function enterDemoMode() {
-    setSession(demoSession);
-    setProfile({ id: "demo-user", email: "demo@local.test", role: "admin" });
-    setToast("Demo mode enabled. History is stored in backend memory for this server run.");
-    setActiveView("chat");
-  }
-
   async function handleSignOut() {
-    if (supabase && session?.access_token !== "demo-token") await supabase.auth.signOut();
+    if (supabase) await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
     setHistory([]);
-    setActiveView("home");
+    setActiveView("login");
   }
 
   async function submitQuestion(dateOverride, eraOverride) {
@@ -171,7 +152,7 @@ export default function App() {
   function handleAsk(event) {
     event.preventDefault();
     if (!isSignedIn) {
-      setToast("Sign in or use demo mode before asking a question.");
+      setToast("Sign in before asking a question.");
       setActiveView("login");
       return;
     }
@@ -193,18 +174,9 @@ export default function App() {
     setActiveView("chat");
   }
 
-  const visibleMappings = useMemo(() => {
-    const q = mappingSearch.toLowerCase().trim();
-    if (!q) return mappings;
-    return mappings.filter((item) =>
-      Object.values(item).some((value) => String(value).toLowerCase().includes(q))
-    );
-  }, [mappings, mappingSearch]);
-
   const navItems = [
     ["home", "Home"],
     ["chat", "Chat"],
-    ["mapping", "Section Mapping"],
     ["about", "About Us"],
     ["history", "Chat History"],
   ];
@@ -235,12 +207,11 @@ export default function App() {
         </nav>
       </header>
 
-      {activeView === "home" && <Landing onStart={() => setActiveView(isSignedIn ? "chat" : "login")} onMap={() => setActiveView("mapping")} />}
+      {activeView === "home" && <Landing onStart={() => setActiveView(isSignedIn ? "chat" : "login")} />}
       {activeView === "about" && <About />}
-      {activeView === "login" && <AuthPanel mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} handleAuth={handleAuth} authMessage={authMessage} enterDemoMode={enterDemoMode} />}
+      {activeView === "login" && <AuthPanel mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} handleAuth={handleAuth} authMessage={authMessage} />}
       {activeView === "chat" && <ChatView legalEra={legalEra} incidentDateText={incidentDateText} setIncidentDateText={setIncidentDateText} question={question} setQuestion={setQuestion} handleAsk={handleAsk} loading={loading} result={result} error={error} signedIn={isSignedIn} onLogin={() => setActiveView("login")} />}
       {activeView === "history" && <HistoryList items={history} onOpen={openHistoryItem} signedIn={isSignedIn} onLogin={() => setActiveView("login")} />}
-      {activeView === "mapping" && <MappingTable mappings={visibleMappings} query={mappingSearch} setQuery={setMappingSearch} />}
 
       {showTransitionPopup && (
         <Modal icon={<Scale size={24} />} title="Legal Transition Date Detected">
@@ -254,7 +225,7 @@ export default function App() {
 
       {clarifyDate && (
         <Modal icon={<CalendarDays size={24} />} title="Exact incident date needed">
-          <p>You entered "{clarifyDate}". The IPC/BNS route depends on the exact incident date.</p>
+          <p>Use Supabase credentials in production to safely store queries.</p>
           <div className="modal-actions">
             <button className="ghost-button" onClick={() => { setClarifyDate(null); setIncidentDateText("2024-06-30"); submitQuestion("2024-06-30"); }}>Before 1 July 2024</button>
             <button className="ghost-button" onClick={() => { setClarifyDate(null); setIncidentDateText("2024-07-01"); submitQuestion("2024-07-01"); }}>On/after 1 July 2024</button>
@@ -278,14 +249,13 @@ function Landing({ onStart, onMap }) {
           <p>Ask date-aware questions, retrieve grounded citations, and compare high-impact IPC provisions with their BNS equivalents in a polished legal-tech workspace.</p>
           <div className="hero-actions">
             <button className="primary-button" onClick={onStart}>Start legal chat <ArrowRight size={18} /></button>
-            <button className="ghost-button dark" onClick={onMap}>Browse mappings</button>
           </div>
         </div>
       </section>
       <section className="feature-band">
         {[
           [<Sparkles size={22} />, "RAG chatbot", "Retrieves IPC/BNS context, routes by incident date, and returns source citations."],
-          [<BookOpen size={22} />, "Section mapping", "Search the top 50 practical IPC to BNS transitions for common offences."],
+
           [<ShieldCheck size={22} />, "Production path", "Supabase auth/history, Pinecone vectors, env-based CORS, and deploy-ready APIs."],
         ].map(([icon, title, copy]) => (
           <article className="feature-card" key={title}>{icon}<h2>{title}</h2><p>{copy}</p></article>
@@ -301,14 +271,13 @@ function AuthPanel(props) {
       <div className="auth-copy">
         <span className="eyebrow">Secure workspace</span>
         <h1>Sign in for saved legal research history.</h1>
-        <p>Use Supabase credentials in production, or enter demo mode to test the full local flow without cloud keys.</p>
       </div>
       <form className="auth-card" onSubmit={props.handleAuth}>
         <h2>{props.mode === "signin" ? "Sign in" : "Create account"}</h2>
         <label>Email<input value={props.email} onChange={(event) => props.setEmail(event.target.value)} type="email" required /></label>
         <label>Password<input value={props.password} onChange={(event) => props.setPassword(event.target.value)} type="password" minLength={6} required /></label>
         <button className="primary-button" type="submit">{props.mode === "signin" ? <LogIn size={18} /> : <UserPlus size={18} />}{props.mode === "signin" ? "Sign in" : "Create account"}</button>
-        <button className="ghost-button" type="button" onClick={props.enterDemoMode}>Use local demo mode</button>
+
         <button className="link-button" type="button" onClick={() => props.setMode(props.mode === "signin" ? "signup" : "signin")}>{props.mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}</button>
         {props.authMessage && <p className="message">{props.authMessage}</p>}
       </form>
@@ -323,7 +292,7 @@ function ChatView({ legalEra, incidentDateText, setIncidentDateText, question, s
         <span className="eyebrow">Date-aware retrieval</span>
         <h1>Chat with the IPC-BNS assistant</h1>
       </div>
-      {!signedIn && <div className="notice"><AlertCircle size={20} /><p>Sign in or use demo mode to ask questions.</p><button className="ghost-button" onClick={onLogin}>Open login</button></div>}
+      {!signedIn && <div className="notice"><AlertCircle size={20} /><p>Sign in to ask questions.</p><button className="ghost-button" onClick={onLogin}>Open login</button></div>}
       <div className="chat-grid">
         <form className="composer" onSubmit={handleAsk}>
           <div className={`era-pill ${legalEra.toLowerCase().replace(" ", "-")}`}><ShieldCheck size={18} />{legalEra}</div>
@@ -359,28 +328,11 @@ function Answer({ result }) {
   );
 }
 
-function MappingTable({ mappings, query, setQuery }) {
-  return (
-    <section className="workspace">
-      <div className="section-heading split">
-        <div><span className="eyebrow">{mappings.length} visible mappings</span><h1>IPC to BNS Section Mapping</h1></div>
-        <label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search murder, 420, cheating, theft..." /></label>
-      </div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>IPC Section</th><th>IPC Title</th><th>BNS Section</th><th>BNS Title</th><th>Key Changes / Notes</th></tr></thead>
-          <tbody>{mappings.map((item) => <tr key={`${item.ipc_section}-${item.bns_section}`}><td>{item.ipc_section}</td><td>{item.ipc_title}</td><td>{item.bns_section}</td><td>{item.bns_title}</td><td>{item.notes}</td></tr>)}</tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
 function HistoryList({ items, onOpen, signedIn, onLogin }) {
   return (
     <section className="workspace narrow">
       <div className="section-heading"><span className="eyebrow">{items.length} saved queries</span><h1>Chat History</h1></div>
-      {!signedIn && <div className="notice"><History size={20} /><p>Sign in or enter demo mode to view chat history.</p><button className="ghost-button" onClick={onLogin}>Open login</button></div>}
+      {!signedIn && <div className="notice"><History size={20} /><p>Sign in to view chat history.</p><button className="ghost-button" onClick={onLogin}>Open login</button></div>}
       <div className="history-list">
         {signedIn && items.length === 0 && <p className="muted">No saved queries yet.</p>}
         {items.map((item) => (
