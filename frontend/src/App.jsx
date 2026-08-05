@@ -61,7 +61,17 @@ export default function App() {
   const isSignedIn = Boolean(session?.access_token);
 
   useEffect(() => {
-    if (!supabase) return;
+    // Startup warning for missing env vars on deployment
+    if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      if (!import.meta.env.VITE_API_BASE_URL || !import.meta.env.VITE_SUPABASE_URL) {
+        setToast("WARNING: Environment variables missing! Vercel cannot connect to the backend. Please add them in your Vercel Dashboard and redeploy.");
+      }
+    }
+
+    if (!supabase) {
+      setToast("WARNING: Supabase is not configured. Auth will fail.");
+      return;
+    }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
     });
@@ -89,7 +99,8 @@ export default function App() {
       setProfile(userProfile);
       setHistory(userHistory);
     } catch (err) {
-      console.error(err);
+      console.error("Session data fetch error:", err);
+      setToast(`Failed to load data: ${err.message}`);
     }
   }
 
