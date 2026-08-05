@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import { Send, Scale, Loader2, CalendarDays } from "lucide-react";
+import { Send, Scale, BookOpen, Paperclip, ChevronDown, RefreshCw, Zap, ShieldCheck } from "lucide-react";
 
 export default function Chat({
   legalEra,
@@ -17,7 +17,7 @@ export default function Chat({
   // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = "24px";
+      textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [question]);
@@ -34,94 +34,134 @@ export default function Chat({
   };
 
   return (
-    <div className="chat-container">
+    <div className="chat-container chat-workspace">
       <div className="chat-header">
-        <div className="chat-header-title">
-          <Scale size={20} color="var(--accent-gold)" /> NyayaSetu AI
+        <div className="chat-header-left">
+          <div className="chat-header-title">
+            <Scale size={24} color="var(--accent-gold)" /> NyayaSetu Legal AI
+          </div>
+          <div className="chat-header-subtitle">
+            AI-powered IPC ↔ BNS Legal Research Assistant
+          </div>
         </div>
-        <div className="input-pill" style={{ background: "white", border: "1px solid #E5E7EB" }}>
-          <CalendarDays size={14} />
+        <div style={{ position: 'relative' }}>
+          <div className="chat-filter-btn" title="Set Incident Date">
+            <span>Date: {incidentDateText || "Any"}</span>
+            <span style={{ color: "var(--accent-gold)" }}>({legalEra})</span>
+            <ChevronDown size={14} />
+          </div>
+          {/* A mock hidden input layer on top of the button for easy date entry without building a complex dropdown component right now */}
           <input 
-            value={incidentDateText} 
-            onChange={(e) => setIncidentDateText(e.target.value)} 
-            placeholder="YYYY-MM-DD"
+            type="date"
+            value={incidentDateText}
+            onChange={(e) => setIncidentDateText(e.target.value)}
+            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
           />
-          <span style={{ color: "var(--accent-gold)", fontSize: "12px", marginLeft: "8px" }}>{legalEra}</span>
         </div>
       </div>
 
       <div className="chat-messages">
         {!result && !error && !loading && (
-          <div className="empty-state">
-            <div className="empty-icon"><Scale size={32} /></div>
-            <h2>How can I assist your legal research today?</h2>
-            <p>I can help compare IPC and BNS provisions, search punishments, and explain legal transition nuances.</p>
+          <div className="welcome-section animate-slide-up">
+            <h2>Welcome back.</h2>
+            <p>Start researching Indian criminal law with AI assistance. Search IPC sections, compare BNS provisions, understand punishments, or explore legal transitions.</p>
             
-            <div className="suggested-prompts">
+            <div className="suggested-prompts" style={{ marginTop: '40px' }}>
               <button className="prompt-card" onClick={() => setPrompt("Compare IPC Section 420 with BNS")}>
-                <h3>Compare IPC Section 420</h3>
-                <p>Find the exact BNS equivalent and notes.</p>
-              </button>
-              <button className="prompt-card" onClick={() => setPrompt("Search punishment for theft")}>
-                <h3>Punishment for theft</h3>
-                <p>Explain the latest BNS provisions.</p>
+                <div className="icon-box"><RefreshCw size={20} /></div>
+                <div>
+                  <h3>Compare IPC Section 420</h3>
+                  <p>Find equivalent BNS provision.</p>
+                </div>
               </button>
               <button className="prompt-card" onClick={() => setPrompt("Explain IPC Section 302")}>
-                <h3>Explain IPC Section 302</h3>
-                <p>View the murder definitions and mappings.</p>
+                <div className="icon-box"><BookOpen size={20} /></div>
+                <div>
+                  <h3>Explain IPC Section 302</h3>
+                  <p>Murder law transition.</p>
+                </div>
               </button>
-              <button className="prompt-card" onClick={() => setPrompt("What is the penalty for kidnapping a minor?")}>
-                <h3>Kidnapping a minor</h3>
-                <p>Search the transition rules for this offence.</p>
+              <button className="prompt-card" onClick={() => setPrompt("What is the penalty for cybercrime under BNS?")}>
+                <div className="icon-box"><Zap size={20} /></div>
+                <div>
+                  <h3>Cybercrime under BNS</h3>
+                  <p>Search latest provisions.</p>
+                </div>
+              </button>
+              <button className="prompt-card" onClick={() => setPrompt("What is the updated punishment for Theft?")}>
+                <div className="icon-box"><ShieldCheck size={20} /></div>
+                <div>
+                  <h3>Punishment for Theft</h3>
+                  <p>Find updated punishment.</p>
+                </div>
               </button>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="message-wrapper">
+          <div className="message-row">
             <div className="auth-error" style={{ marginBottom: 0 }}>{error}</div>
           </div>
         )}
 
         {result && (
-          <div className="message-wrapper">
-            <div className="message message-user">
-              <div className="message-header">
-                <div className="avatar avatar-user">U</div>
-                User Request
+          <>
+            <div className="message-row message-row-user animate-slide-up">
+              <div className="message-bubble message-bubble-user">
+                {result.question_asked || "Prior query loaded."}
               </div>
-              <div className="message-content">{result.question_asked || "Prior query loaded."}</div>
             </div>
 
-            <div className="message message-ai">
-              <div className="message-header">
-                <div className="avatar avatar-ai"><Scale size={14}/></div>
-                NyayaSetu Assistant
-              </div>
-              <div className="message-content">{result.answer}</div>
-              
-              {result.citations && result.citations.length > 0 && (
-                <div className="citations-box">
-                  <h4><BookOpen size={16} /> Source Citations</h4>
-                  {result.citations.map((c, i) => (
-                    <div className="citation-card" key={i}>
-                      <strong>{c.act} Section {c.section}: {c.title}</strong>
-                      <span>Relevance Score: {Number(c.score || 0).toFixed(3)} | Page: {c.page}</span>
-                      <p>{c.text}</p>
-                    </div>
-                  ))}
+            <div className="message-row animate-slide-up-delay">
+              <div className="message-bubble message-bubble-ai">
+                <div className="message-ai-header">
+                  <div className="avatar-ai"><Scale size={16}/></div>
+                  NyayaSetu
                 </div>
-              )}
+                
+                <div style={{ whiteSpace: "pre-wrap" }}>
+                  {result.answer}
+                </div>
+                
+                {result.citations && result.citations.length > 0 && (
+                  <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #E5E7EB" }}>
+                    <h4 style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <BookOpen size={14} /> Source Citations
+                    </h4>
+                    <div style={{ display: "grid", gap: "12px" }}>
+                      {result.citations.map((c, i) => (
+                        <div key={i} style={{ background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid #E5E7EB" }}>
+                          <strong style={{ display: "block", fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px" }}>
+                            {c.act} Section {c.section}: {c.title}
+                          </strong>
+                          <span style={{ display: "block", fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>
+                            Match Score: {Number(c.score || 0).toFixed(3)} • Source page: {c.page}
+                          </span>
+                          <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                            {c.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {loading && (
-          <div className="message-wrapper">
-            <div className="message message-ai" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Loader2 className="spin" size={20} color="var(--accent-gold)" />
-              <span style={{ color: "var(--text-secondary)" }}>Analyzing legal corpus...</span>
+          <div className="message-row animate-slide-up">
+            <div className="message-bubble message-bubble-ai" style={{ maxWidth: "200px" }}>
+              <div className="typing-indicator">
+                <Scale size={16} color="var(--accent-gold)" />
+                <div className="dots">
+                  <div className="dot"></div>
+                  <div className="dot"></div>
+                  <div className="dot"></div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -129,28 +169,28 @@ export default function Chat({
 
       <div className="chat-input-wrapper">
         <form className="chat-input-container" onSubmit={handleAsk}>
-          <textarea
-            ref={textareaRef}
-            className="chat-textarea"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask about a section, offence, punishment, or transition..."
-            rows={1}
-          />
-          <div className="chat-send-row">
-            <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              Press Shift + Enter for new line
-            </div>
-            <button className="send-btn" type="submit" disabled={loading || !question.trim()}>
-              <Send size={18} />
+          <div className="chat-input-top">
+            <button type="button" className="attach-btn">
+              <Paperclip size={20} />
             </button>
+            <textarea
+              ref={textareaRef}
+              className="chat-textarea"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask about IPC, BNS, punishments, legal provisions, or criminal law..."
+              rows={1}
+            />
+            <button className="send-btn" type="submit" disabled={loading || !question.trim()}>
+              <Send size={20} />
+            </button>
+          </div>
+          <div className="chat-input-bottom">
+            <span className="chat-hint">NyayaSetu can make mistakes. Check important info. (Press Shift + Enter for new line)</span>
           </div>
         </form>
       </div>
     </div>
   );
 }
-
-// Importing missing icon locally within the file to avoid broken imports
-import { BookOpen } from "lucide-react";
