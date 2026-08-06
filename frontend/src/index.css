@@ -476,7 +476,7 @@ input:focus, textarea:focus {
 .auth-bg {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(to bottom, var(--bg-alpha-medium) 0%, var(--bg-primary) 100%), url('https://images.unsplash.com/photo-1589829085413-56de8ae18c73?q=80&w=2400&auto=format&fit=crop') center/cover;
+  background: linear-gradient(to bottom, var(--bg-alpha-medium) 0%, var(--bg-primary) 100%), url('/assets/images/gavel-bg.jpg') center/cover;
   z-index: 0;
 }
 
@@ -603,7 +603,7 @@ input:focus, textarea:focus {
 .hero-bg {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(to bottom, var(--bg-alpha-light) 0%, var(--bg-alpha-medium) 60%, var(--bg-primary) 100%), url('https://images.unsplash.com/photo-1589829085413-56de8ae18c73?q=80&w=2400&auto=format&fit=crop') center/cover;
+  background: linear-gradient(to bottom, var(--bg-alpha-light) 0%, var(--bg-alpha-medium) 60%, var(--bg-primary) 100%), url('https://images.unsplash.com/photo-1589994965851-a8f479c573a9?q=80&w=2400&auto=format&fit=crop') center/cover;
   z-index: 0;
 }
 
@@ -1262,10 +1262,17 @@ input:focus, textarea:focus {
   position: relative;
   padding: 140px 24px;
   text-align: center;
-  color: var(--text-primary);
+  color: #FFFFFF;
   margin-bottom: 64px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
+}
+
+.about-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to bottom, var(--bg-alpha-light) 0%, var(--bg-primary) 100%), url('https://images.unsplash.com/photo-1589994965851-a8f479c573a9?q=80&w=2400&auto=format&fit=crop') center/cover;
+  z-index: 0;
 }
 
 .about-hero-content {

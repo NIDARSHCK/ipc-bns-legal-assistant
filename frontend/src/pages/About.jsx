@@ -33,7 +33,7 @@ export default function About() {
         </div>
       </section>
 
-      <div style={{ height: '300px', background: 'linear-gradient(to bottom, rgba(15,15,15,0.7) 0%, rgba(15,15,15,0.9) 100%), url(https://images.unsplash.com/photo-1589391886645-154fa67876a4?q=80&w=2400) center/cover fixed', marginBottom: '80px' }}></div>
+      <div style={{ height: '300px', background: `linear-gradient(to bottom, var(--bg-alpha-light) 0%, var(--bg-primary) 100%), url('https://images.unsplash.com/photo-1589994965851-a8f479c573a9?q=80&w=2400&auto=format&fit=crop') center/cover fixed`, marginBottom: '80px' }}></div>
 
       <section className="about-section">
         <h2><Gavel size={32} color="var(--accent-gold)" /> Who We Serve</h2>
