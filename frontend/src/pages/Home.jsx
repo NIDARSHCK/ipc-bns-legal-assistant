@@ -138,7 +138,7 @@ export default function Home({ onStart }) {
         <div className="cta-bg"></div>
         <div className="cta-content">
           <h2>Ready to upgrade your legal research?</h2>
-          <p style={{ fontSize: '20px', color: 'rgba(255,255,255,0.8)', marginBottom: '32px' }}>
+          <p style={{ fontSize: '20px', color: 'var(--text-secondary)', marginBottom: '32px' }}>
             Join professionals across India adapting to the BNS seamlessly.
           </p>
           <button className="btn btn-primary" onClick={onStart} style={{ padding: '16px 32px', fontSize: '16px' }}>

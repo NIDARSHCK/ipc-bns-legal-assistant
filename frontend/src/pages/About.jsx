@@ -9,7 +9,7 @@ export default function About() {
         <div className="about-bg"></div>
         <div className="about-hero-content">
           <h1>Built for the Legal Future</h1>
-          <p style={{ fontSize: "22px", color: "rgba(255,255,255,0.9)", maxWidth: "800px", margin: "0 auto" }}>
+          <p style={{ fontSize: "22px", color: "var(--text-secondary)", maxWidth: "800px", margin: "0 auto" }}>
             Navigating the transition from the Indian Penal Code (IPC) to the Bharatiya Nyaya Sanhita (BNS) with AI precision.
           </p>
         </div>

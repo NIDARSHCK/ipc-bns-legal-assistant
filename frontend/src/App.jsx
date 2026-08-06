@@ -285,7 +285,7 @@ export default function App() {
         )}
 
         {toast && (
-          <div style={{ position: "fixed", bottom: "24px", right: "24px", background: "var(--text-primary)", color: "white", padding: "12px 24px", borderRadius: "8px", zIndex: 100, boxShadow: "var(--shadow-lg)", cursor: "pointer" }} onClick={() => setToast("")}>
+          <div style={{ position: "fixed", bottom: "24px", right: "24px", background: "var(--text-primary)", color: "var(--bg-primary)", padding: "12px 24px", borderRadius: "8px", zIndex: 100, boxShadow: "var(--shadow-lg)", cursor: "pointer" }} onClick={() => setToast("")}>
             {toast}
           </div>
         )}

@@ -1262,7 +1262,7 @@ input:focus, textarea:focus {
   position: relative;
   padding: 140px 24px;
   text-align: center;
-  color: #FFFFFF;
+  color: var(--text-primary);
   margin-bottom: 64px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
