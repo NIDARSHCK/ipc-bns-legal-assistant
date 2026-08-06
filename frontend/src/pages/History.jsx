@@ -65,7 +65,7 @@ export default function History({ items, onOpen }) {
         <div className="history-content">
           {items.length === 0 && (
             <div className="empty-state animate-fade-in" style={{ padding: "80px 20px" }}>
-              <div className="empty-icon" style={{ width: "80px", height: "80px", background: "white", boxShadow: "var(--shadow-sm)" }}>
+              <div className="empty-icon" style={{ width: "80px", height: "80px", background: "var(--card-bg)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-full)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", boxShadow: "var(--shadow-sm)" }}>
                 <Clock size={40} color="var(--accent-gold)" />
               </div>
               <h2 style={{ fontSize: "28px", fontWeight: 800 }}>Legal research starts here.</h2>

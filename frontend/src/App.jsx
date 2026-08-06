@@ -198,6 +198,7 @@ export default function App() {
         setMobileOpen={setMobileOpen} 
         isSignedIn={isSignedIn}
         handleSignOut={handleSignOut}
+        profile={profile}
       />
 
       <div className="main-content">

@@ -1,8 +1,14 @@
-import React from "react";
-import { ArrowRight, Scale, ShieldCheck, Zap, Library, Users, Search, BookOpen, User, BookKey } from "lucide-react";
+import React, { useRef } from "react";
+import { ArrowRight, Scale, ShieldCheck, Zap, Library, Users, Search, BookOpen, BookKey, Gavel, ChevronDown } from "lucide-react";
 import Footer from "../components/Footer";
 
 export default function Home({ onStart }) {
+  const featuresRef = useRef(null);
+
+  const scrollToFeatures = () => {
+    featuresRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="main-content">
       {/* Hero Section */}
@@ -10,20 +16,25 @@ export default function Home({ onStart }) {
         <div className="hero-bg"></div>
         <div className="hero-content animate-fade-in">
           <h1>Navigate India's Criminal Law Transition with Confidence</h1>
-          <p>Compare IPC and BNS provisions using an AI-powered legal research assistant.</p>
+          <p>Compare IPC and BNS provisions instantly using an AI-powered legal research assistant.</p>
           <div className="hero-actions animate-slide-up-delay">
             <button className="btn btn-primary" onClick={onStart}>
               Start Legal Research <ArrowRight size={18} />
             </button>
-            <button className="btn btn-outline" style={{ color: "white", borderColor: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.1)" }}>
+            <button className="btn btn-outline" onClick={scrollToFeatures}>
               Learn More
             </button>
           </div>
         </div>
+        
+        <div className="scroll-indicator animate-bounce" onClick={scrollToFeatures}>
+          <span>Scroll to Explore</span>
+          <ChevronDown size={24} />
+        </div>
       </section>
 
       {/* Features Section */}
-      <section className="section-padding" style={{ background: "var(--bg-primary)" }}>
+      <section ref={featuresRef} className="section-padding" style={{ background: "var(--bg-primary)" }}>
         <h2 className="section-title">Why Choose NyayaSetu</h2>
         <div className="grid-3">
           <div className="premium-card">
@@ -89,42 +100,42 @@ export default function Home({ onStart }) {
             <div className="icon-box" style={{ marginBottom: 0, width: '48px', height: '48px' }}><Scale size={20} /></div>
             <div>
               <h3 style={{ marginBottom: '4px', fontSize: '18px' }}>Lawyers</h3>
-              <p style={{ fontSize: '14px' }}>Transition cases seamlessly.</p>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Transition cases seamlessly.</p>
             </div>
           </div>
           <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '24px' }}>
             <div className="icon-box" style={{ marginBottom: 0, width: '48px', height: '48px' }}><BookKey size={20} /></div>
             <div>
               <h3 style={{ marginBottom: '4px', fontSize: '18px' }}>Law Students</h3>
-              <p style={{ fontSize: '14px' }}>Study comparative law.</p>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Study comparative law.</p>
             </div>
           </div>
           <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '24px' }}>
             <div className="icon-box" style={{ marginBottom: 0, width: '48px', height: '48px' }}><ShieldCheck size={20} /></div>
             <div>
               <h3 style={{ marginBottom: '4px', fontSize: '18px' }}>Police Officers</h3>
-              <p style={{ fontSize: '14px' }}>Quick statutory lookups.</p>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Quick statutory lookups.</p>
             </div>
           </div>
           <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '24px' }}>
             <div className="icon-box" style={{ marginBottom: 0, width: '48px', height: '48px' }}><Gavel size={20} /></div>
             <div>
               <h3 style={{ marginBottom: '4px', fontSize: '18px' }}>Judiciary Aspirants</h3>
-              <p style={{ fontSize: '14px' }}>Prepare for exams.</p>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Prepare for exams.</p>
             </div>
           </div>
           <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '24px' }}>
             <div className="icon-box" style={{ marginBottom: 0, width: '48px', height: '48px' }}><Library size={20} /></div>
             <div>
               <h3 style={{ marginBottom: '4px', fontSize: '18px' }}>Researchers</h3>
-              <p style={{ fontSize: '14px' }}>Analyze penal shifts.</p>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Analyze penal shifts.</p>
             </div>
           </div>
           <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '24px' }}>
             <div className="icon-box" style={{ marginBottom: 0, width: '48px', height: '48px' }}><Users size={20} /></div>
             <div>
               <h3 style={{ marginBottom: '4px', fontSize: '18px' }}>Citizens</h3>
-              <p style={{ fontSize: '14px' }}>Understand legal rights.</p>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Understand legal rights.</p>
             </div>
           </div>
         </div>
@@ -148,6 +159,3 @@ export default function Home({ onStart }) {
     </div>
   );
 }
-
-// Ensure Gavel is imported
-import { Gavel } from "lucide-react";

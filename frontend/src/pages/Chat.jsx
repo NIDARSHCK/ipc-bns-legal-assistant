@@ -125,13 +125,13 @@ export default function Chat({
                 </div>
                 
                 {result.citations && result.citations.length > 0 && (
-                  <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #E5E7EB" }}>
+                  <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--border-color)" }}>
                     <h4 style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                       <BookOpen size={14} /> Source Citations
                     </h4>
                     <div style={{ display: "grid", gap: "12px" }}>
                       {result.citations.map((c, i) => (
-                        <div key={i} style={{ background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid #E5E7EB" }}>
+                        <div key={i} style={{ background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
                           <strong style={{ display: "block", fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px" }}>
                             {c.act} Section {c.section}: {c.title}
                           </strong>
