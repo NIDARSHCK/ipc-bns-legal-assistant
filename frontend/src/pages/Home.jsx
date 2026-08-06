@@ -14,20 +14,12 @@ export default function Home({ onStart }) {
       {/* Hero Section */}
       <section className="hero-wrapper">
         <div className="hero-bg"></div>
-        <div className="hero-content animate-fade-in">
-          <h1>Navigate India's Criminal Law Transition with Confidence</h1>
-          <p>Compare IPC and BNS provisions instantly using an AI-powered legal research assistant.</p>
-          <div className="hero-actions animate-slide-up-delay">
-            <button className="btn btn-primary" onClick={onStart}>
-              Start Legal Research <ArrowRight size={18} />
-            </button>
-            <button className="btn btn-outline" onClick={scrollToFeatures}>
-              Learn More
-            </button>
-          </div>
+        <div className="hero-logo-lockup animate-scale-up">
+          <Scale size={120} />
+          <h1>NyayaSetu</h1>
         </div>
         
-        <div className="scroll-indicator animate-bounce" onClick={scrollToFeatures}>
+        <div className="scroll-indicator animate-bounce" onClick={scrollToFeatures} style={{ position: "absolute", bottom: "40px" }}>
           <span>Scroll to Explore</span>
           <ChevronDown size={24} />
         </div>

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Scale, Home, MessageSquare, History, Info, LogOut, LogIn, X, User, Settings, ChevronUp, ChevronDown } from "lucide-react";
+import { Scale, Home, MessageSquare, History, Info, LogOut, LogIn, X, User, Settings, ChevronUp, ChevronDown, Sun, Moon } from "lucide-react";
 
-export default function Sidebar({ activeView, setActiveView, mobileOpen, setMobileOpen, isSignedIn, handleSignOut, profile }) {
+export default function Sidebar({ activeView, setActiveView, mobileOpen, setMobileOpen, isSignedIn, handleSignOut, profile, theme, toggleTheme }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -57,6 +57,14 @@ export default function Sidebar({ activeView, setActiveView, mobileOpen, setMobi
         </nav>
         
         <div className="sidebar-footer">
+          <button className="theme-toggle-btn" onClick={toggleTheme}>
+            {theme === "light" ? (
+              <><Moon size={16} /> Dark Mode</>
+            ) : (
+              <><Sun size={16} /> Light Mode</>
+            )}
+          </button>
+          
           {isSignedIn ? (
             <div className="profile-dropdown-container" ref={dropdownRef}>
               {profileOpen && (

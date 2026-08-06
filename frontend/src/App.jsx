@@ -35,6 +35,16 @@ function parseIncidentDate(value) {
 export default function App() {
   const [activeView, setActiveView] = useState("home");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+
+  useEffect(() => {
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === "light" ? "dark" : "light");
+  };
+
   
   // Auth state
   const [mode, setMode] = useState("signin");
@@ -190,7 +200,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${theme === "dark" ? "dark-theme" : ""}`}>
       <Sidebar 
         activeView={activeView} 
         setActiveView={setActiveView} 
@@ -199,6 +209,8 @@ export default function App() {
         isSignedIn={isSignedIn}
         handleSignOut={handleSignOut}
         profile={profile}
+        theme={theme}
+        toggleTheme={toggleTheme}
       />
 
       <div className="main-content">
