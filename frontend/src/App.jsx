@@ -39,6 +39,11 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem("theme", theme);
+    if (theme === "dark") {
+      document.body.classList.add("dark-theme");
+    } else {
+      document.body.classList.remove("dark-theme");
+    }
   }, [theme]);
 
   const toggleTheme = () => {
@@ -200,7 +205,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-layout ${theme === "dark" ? "dark-theme" : ""}`}>
+    <div className="app-layout">
       <Sidebar 
         activeView={activeView} 
         setActiveView={setActiveView} 
