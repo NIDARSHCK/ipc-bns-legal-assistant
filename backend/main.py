@@ -57,6 +57,9 @@ class AskResponse(BaseModel):
     citations: list[dict]
     comparison: Optional[dict] = None
     history_id: Optional[str] = None
+    query: str
+    expanded_query: Optional[str] = None
+    disclaimer: str
 
 
 
@@ -261,8 +264,25 @@ async def ask_legal_question(
             answer=answer,
             incident_date=payload.incident_date.isoformat(),
             legal_era=legal_era,
-            citations=retrieved,
+            citations=retrieved if 'retrieved' in locals() else [],
         )
+        
+    print("\n" + "="*50)
+    print("DEVELOPMENT DEBUG LOG")
+    print("="*50)
+    print(f"USER QUERY: {payload.question}")
+    print(f"intent: {intent}")
+    print(f"expanded query: {optimized_query}")
+    print(f"top_k: 5 (default)")
+    if 'retrieved' in locals() and retrieved:
+        print(f"retrieved documents: {len(retrieved)}")
+        for i, c in enumerate(retrieved):
+            print(f"  [{i+1}] Score: {c.get('score')} | Act: {c.get('act')} | Section: {c.get('section')}")
+            print(f"       Metadata: Page {c.get('page')}, Year {c.get('year')}, Status {c.get('status')}")
+    else:
+        print("retrieved documents: 0")
+    print(f"final decision: {answer[:100]}...")
+    print("="*50 + "\n")
 
     return AskResponse(
         answer=answer,
@@ -272,4 +292,7 @@ async def ask_legal_question(
         citations=retrieved if 'retrieved' in locals() else [],
         comparison=comparison if 'comparison' in locals() else None,
         history_id=history_id,
+        query=payload.question,
+        expanded_query=optimized_query,
+        disclaimer="This information is for general legal information and is not a substitute for professional legal advice."
     )

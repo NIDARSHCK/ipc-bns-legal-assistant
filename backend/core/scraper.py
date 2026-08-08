@@ -32,41 +32,70 @@ def detect_section(text: str) -> str:
     return "unknown"
 
 
-def split_into_chunks(text: str, act: str, source_name: str, max_chars: int = 1400) -> list[dict]:
-    normalized = re.sub(r"\s+", " ", text).strip()
+def split_into_chunks(text: str, act: str, source_name: str, year: int = None, status: str = "unknown", source: str = "unknown", max_chars: int = 1400) -> list[dict]:
+    # A robust section regex to capture "Section 281. Title.—Content"
+    # Legal texts might have various forms. We'll split on "Section " or "Sec. " followed by number.
+    # The new chunking strategy uses a regex split to keep entire sections together.
+    
+    # Split text into rough chunks using "Section [num]"
+    parts = re.split(r"(?i)\n(?=section\s+\d+|sec\.?\s+\d+)", text)
+    
     pieces = []
-    start = 0
     counter = 1
-    current_section = "unknown"
-
-    while start < len(normalized):
-        end = min(start + max_chars, len(normalized))
-        if end < len(normalized):
-            boundary = normalized.rfind(". ", start, end)
-            if boundary > start + 500:
-                end = boundary + 1
-
-        chunk_text = normalized[start:end].strip()
-        if chunk_text:
-            section = detect_section(chunk_text)
-            if section != "unknown":
-                current_section = section
-            elif current_section != "unknown":
-                section = current_section
+    
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
             
-            pieces.append(
-                {
-                    "id": f"{act.lower()}-{source_name}-{counter}",
-                    "text": chunk_text,
-                    "act": act.upper(),
-                    "section": section,
-                    "title": f"{act.upper()} Section {section} chunk {counter}",
-                    "page": _page_hint(chunk_text),
-                }
-            )
+        # Try to detect section number and title in this part
+        # Example: "Section 281. Rash driving.—(1) Whoever..."
+        section_num = "unknown"
+        title = "Legal text"
+        
+        match = re.search(r"^(?:section|sec\.?)\s+([0-9A-Za-z-]+)\.?\s+([^—\n]+)", part, flags=re.I)
+        if match:
+            section_num = match.group(1)
+            title = match.group(2).strip()
+        else:
+            # Fallback if just numbered e.g. "281. Rash driving"
+            match2 = re.search(r"^([0-9]+[A-Z]?)\.\s+([A-Z][^—\n]+)", part)
+            if match2:
+                section_num = match2.group(1)
+                title = match2.group(2).strip()
+        
+        # We may still need to sub-chunk if a single section is extremely long (over 2000 chars)
+        # to fit well in the embedding model context window.
+        sub_parts = []
+        if len(part) > 2000:
+            start = 0
+            while start < len(part):
+                end = min(start + 1800, len(part))
+                if end < len(part):
+                    boundary = part.rfind(". ", start, end)
+                    if boundary > start + 500:
+                        end = boundary + 1
+                sub_parts.append(part[start:end].strip())
+                start = end
+        else:
+            sub_parts = [part]
+            
+        for sub in sub_parts:
+            if not sub:
+                continue
+            pieces.append({
+                "id": f"{act.lower()}-{source_name}-{section_num}-{counter}",
+                "text": sub,
+                "act": act.upper(),
+                "section": section_num,
+                "title": title,
+                "page": _page_hint(sub),
+                "year": year,
+                "status": status,
+                "source": source
+            })
             counter += 1
-        start = end
-
+            
     return pieces
 
 

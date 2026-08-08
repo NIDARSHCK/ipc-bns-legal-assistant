@@ -69,7 +69,7 @@ def search_legal_corpus(
 ) -> list[dict]:
     idx = index()
     # Search both namespaces to support automatic cross-referencing where appropriate
-    namespaces_to_search = ["ipc", "bns"]
+    namespaces_to_search = ["ipc_v2", "bns_v2"]
     
     all_hits = []
     vector = None
@@ -77,7 +77,7 @@ def search_legal_corpus(
         vector = embed_texts([query], input_type="query")[0]
 
     for ns in namespaces_to_search:
-        act = ns.upper()
+        act = ns.split('_')[0].upper()
         
         # 1. Exact section search
         if exact_section:
@@ -173,6 +173,9 @@ def upsert_chunks(namespace: str, chunks: Iterable[dict]) -> None:
                 "section": chunk.get("section", "unknown"),
                 "title": chunk.get("title", "Legal text"),
                 "page": chunk.get("page", "unknown"),
+                "year": chunk.get("year"),
+                "status": chunk.get("status", "unknown"),
+                "source": chunk.get("source", "unknown"),
             }
         )
 
@@ -197,6 +200,9 @@ def upsert_chunks(namespace: str, chunks: Iterable[dict]) -> None:
                             "section": item["section"],
                             "title": item["title"],
                             "page": item["page"],
+                            "year": item.get("year"),
+                            "status": item["status"],
+                            "source": item["source"],
                             TEXT_FIELD: item[TEXT_FIELD],
                         },
                     }

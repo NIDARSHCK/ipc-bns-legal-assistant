@@ -22,10 +22,13 @@ async def analyze_query_intent(question: str) -> dict:
         Classify the user's intent into one of these EXACT categories:
         - greeting (for hi, hello, who are you)
         - legal_question (for general offenses, punishments, IPC/BNS sections)
+        - legal_situation (for "someone hit my car", "my neighbor is threatening me", "accident")
         - comparison (explicitly asking to compare IPC and BNS)
-        - unsupported (non-legal questions)
+        - summarization (asking to summarize a law)
+        - general_information (general questions about the assistant)
+        - unsupported (non-legal questions like "how to cook")
         
-        If it is a legal_question or comparison, generate an "optimized_query" containing 4-8 highly relevant keywords (e.g., "cheating deception dishonest inducement IPC BNS offence") to maximize vector search retrieval.
+        If it is a legal_question, legal_situation, or comparison, generate an "optimized_query" containing 4-8 highly relevant keywords (e.g., "cheating deception dishonest inducement IPC BNS offence", "rash driving negligence road accident BNS") to maximize vector search retrieval.
         
         Return ONLY a JSON object with this exact schema:
         {
@@ -97,14 +100,14 @@ async def build_legal_answer(
     system_prompt = dedent(
         """
         You are a careful Indian legal information assistant for the IPC to BNS transition.
-        Answer only from the retrieved context. If context is insufficient, say EXACTLY: "I couldn't find a sufficiently relevant source in the available legal documents."
-        Never invent section numbers, punishments, Gazette pages, or procedures.
-        Always mention whether the incident date routes the query to IPC or BNS.
+        Answer ONLY from the retrieved context. If the context is insufficient, say EXACTLY: "I couldn't find a sufficiently relevant source in the available legal documents."
+        NEVER invent section numbers, punishments, Gazette pages, mappings, or procedures.
+        Page numbers must come strictly from the retrieved metadata (e.g. source page).
         
         Return ONLY a JSON object with this exact schema:
         {
-          "answer": "Clear, simple explanation in markdown.",
-          "comparison": null  // Set this ONLY if specifically asked to compare, or if a clear mapping exists.
+          "answer": "Format EXACTLY with these markdown sections:\n\n**Relevant Law**\n...\n\n**What it means**\n...\n\n**How it relates**\n...\n\n**Punishment / consequence**\n...\n\n**Important**\n...\n\n**Source**\n...\n\n**Disclaimer**\nThis information is for general legal information and is not a substitute for professional legal advice.",
+          "comparison": null  // Set this ONLY if specifically asked to compare, or if a clear mapping exists IN THE CONTEXT. Do not hallucinate IPC-BNS mappings.
         }
         
         If comparison is set, use this schema:

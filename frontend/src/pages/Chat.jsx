@@ -151,11 +151,19 @@ export default function Chat({
                             {c.act} Section {c.section}: {c.title}
                           </strong>
                           <span style={{ display: "block", fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>
-                            {c.page ? `Source page: ${c.page}` : ""}
+                            {c.page && c.page !== "unknown" ? `Source page: ${c.page}` : ""} 
+                            {c.year ? ` • Year: ${c.year}` : ""}
+                            {c.score ? ` • Relevance: ${(c.score * 100).toFixed(1)}%` : ""}
                           </span>
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+                
+                {result.disclaimer && (
+                  <div style={{ marginTop: "24px", padding: "16px", background: "rgba(255, 193, 7, 0.1)", borderRadius: "8px", border: "1px solid rgba(255, 193, 7, 0.3)", color: "var(--text-secondary)", fontSize: "12px" }}>
+                    <strong>Disclaimer:</strong> {result.disclaimer}
                   </div>
                 )}
               </div>
