@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://ipc-bns-legal-assistant.onrender.com";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "https://ipc-bns-legal-assistant.onrender.com").replace(/\/+$/, "");
 
 // Helper to safely parse JSON or throw a readable error if the backend returns HTML (e.g. 502 Bad Gateway)
 async function fetchWithJson(url, options = {}) {
