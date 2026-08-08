@@ -121,8 +121,23 @@ export default function Chat({
                 </div>
                 
                 <div style={{ whiteSpace: "pre-wrap" }}>
-                  {result.answer}
+                  {typeof result.answer === 'string' ? result.answer : "Invalid response format received."}
                 </div>
+                
+                {result.comparison && (
+                  <div className="comparison-panel" style={{ marginTop: "24px", display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                      <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>IPC Section {result.comparison.ipc?.section || "N/A"}</h4>
+                      <p><strong>Offence:</strong> {result.comparison.ipc?.offence || "N/A"}</p>
+                      {result.comparison.ipc?.punishment && <p><strong>Punishment:</strong> {result.comparison.ipc.punishment}</p>}
+                    </div>
+                    <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                      <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>BNS Section {result.comparison.bns?.section || "N/A"}</h4>
+                      <p><strong>Offence:</strong> {result.comparison.bns?.offence || "N/A"}</p>
+                      {result.comparison.bns?.punishment && <p><strong>Punishment:</strong> {result.comparison.bns.punishment}</p>}
+                    </div>
+                  </div>
+                )}
                 
                 {result.citations && result.citations.length > 0 && (
                   <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--border-color)" }}>
@@ -136,11 +151,8 @@ export default function Chat({
                             {c.act} Section {c.section}: {c.title}
                           </strong>
                           <span style={{ display: "block", fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>
-                            Match Score: {Number(c.score || 0).toFixed(3)} • Source page: {c.page}
+                            {c.page ? `Source page: ${c.page}` : ""}
                           </span>
-                          <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                            {c.text}
-                          </p>
                         </div>
                       ))}
                     </div>

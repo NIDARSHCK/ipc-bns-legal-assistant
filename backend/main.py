@@ -7,7 +7,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from core.llm_handler import build_legal_answer
+from core.llm_handler import build_legal_answer, analyze_query_intent
 from core.query_guard import is_legal_query
 from core.section_mapping import find_mapping_for_query, get_equivalent_section, get_mappings
 from core.vector_db import search_legal_corpus
@@ -44,16 +44,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 class AskRequest(BaseModel):
-    question: str = Field(..., min_length=5)
+    question: str
     incident_date: date
     forced_era: Optional[str] = None
 
 
 class AskResponse(BaseModel):
     answer: str
+    intent: str
     legal_era: str
     namespace: str
     citations: list[dict]
+    comparison: Optional[dict] = None
     history_id: Optional[str] = None
 
 
@@ -148,12 +150,6 @@ async def ask_legal_question(
 ):
     user = authenticated_user(authorization)
 
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Please sign in before asking a legal question.",
-        )
-
     if not is_legal_query(payload.question):
         raise HTTPException(
             status_code=400,
@@ -172,6 +168,22 @@ async def ask_legal_question(
 
     namespace = "bns" if legal_era == "BNS" else "ipc"
 
+    intent_data = await analyze_query_intent(payload.question)
+    intent = intent_data.get("intent", "legal_question")
+    optimized_query = intent_data.get("optimized_query") or payload.question
+
+    if intent == "greeting":
+        answer = "Hello! I'm NyayaSetu Legal AI. You can ask me about IPC and BNS provisions, offences, punishments, or comparisons."
+        return AskResponse(
+            answer=answer,
+            intent=intent,
+            legal_era=legal_era,
+            namespace=namespace,
+            citations=[],
+            comparison=None,
+            history_id=None
+        )
+
     # Regex Exact Section Detection
     section_match = re.search(
         r"(?:section|sec\.?)\s*(\d+[A-Za-z()/-]*)",
@@ -186,49 +198,50 @@ async def ask_legal_question(
 
     try:
         retrieved = search_legal_corpus(
-            payload.question,
+            optimized_query,
             namespace=None, # Allow searching across both namespaces
             exact_section=exact_section,
         )
 
         if not retrieved:
-            raise HTTPException(
-                status_code=404,
-                detail="No reliable legal source matched this query.",
-            )
-
-        try:
-            answer = await build_legal_answer(
-                question=payload.question,
-                incident_date=payload.incident_date.isoformat(),
-                legal_era=legal_era,
-                retrieved_chunks=retrieved,
-            )
-        except Exception:
-            answer = build_fallback_answer(
-                payload.question,
-                payload.incident_date.isoformat(),
-                legal_era,
-                retrieved,
-            )
-
-        # Relational Mapping
-        mapping = None
-        if exact_section:
-            mapping = next((item for item in get_mappings() if item["ipc_section"] == exact_section or item["bns_section"] == exact_section), None)
+            answer = "I couldn't find a sufficiently relevant source in the available legal documents."
+            comparison = None
+        else:
+            try:
+                llm_res = await build_legal_answer(
+                    question=payload.question,
+                    incident_date=payload.incident_date.isoformat(),
+                    legal_era=legal_era,
+                    retrieved_chunks=retrieved,
+                )
+                answer = llm_res.get("answer", "")
+                comparison = llm_res.get("comparison", None)
+            except Exception:
+                answer = build_fallback_answer(
+                    payload.question,
+                    payload.incident_date.isoformat(),
+                    legal_era,
+                    retrieved,
+                )
+                comparison = None
             
-        if not mapping:
-            mapping = find_mapping_for_query(payload.question, legal_era)
+            # Relational Mapping
+            mapping = None
+            if exact_section:
+                mapping = next((item for item in get_mappings() if item["ipc_section"] == exact_section or item["bns_section"] == exact_section), None)
+                
+            if not mapping:
+                mapping = find_mapping_for_query(payload.question, legal_era)
 
-        if mapping:
-            ipc_sec = mapping["ipc_section"]
-            bns_sec = mapping["bns_section"]
-            title = mapping["bns_title"] if legal_era == "BNS" else mapping["ipc_title"]
-            
-            if legal_era == "IPC":
-                answer += f"\n\n**Section Mapping:** IPC Section {ipc_sec} maps to **BNS Section {bns_sec}** ({title}). Note: {mapping['notes']}"
-            else:
-                answer += f"\n\n**Section Mapping:** BNS Section {bns_sec} maps to **IPC Section {ipc_sec}** ({title}). Note: {mapping['notes']}"
+            if mapping and not comparison:
+                ipc_sec = mapping["ipc_section"]
+                bns_sec = mapping["bns_section"]
+                title = mapping["bns_title"] if legal_era == "BNS" else mapping["ipc_title"]
+                
+                if legal_era == "IPC":
+                    answer += f"\n\n**Section Mapping:** IPC Section {ipc_sec} maps to **BNS Section {bns_sec}** ({title}). Note: {mapping['notes']}"
+                else:
+                    answer += f"\n\n**Section Mapping:** BNS Section {bns_sec} maps to **IPC Section {ipc_sec}** ({title}). Note: {mapping['notes']}"
 
     except HTTPException:
         raise
@@ -240,19 +253,23 @@ async def ask_legal_question(
         ) from exc
 
     # Store Query History
-    history_id = save_query(
-        user_id=user["id"],
-        question=payload.question,
-        answer=answer,
-        incident_date=payload.incident_date.isoformat(),
-        legal_era=legal_era,
-        citations=retrieved,
-    )
+    history_id = None
+    if user:
+        history_id = save_query(
+            user_id=user["id"],
+            question=payload.question,
+            answer=answer,
+            incident_date=payload.incident_date.isoformat(),
+            legal_era=legal_era,
+            citations=retrieved,
+        )
 
     return AskResponse(
         answer=answer,
+        intent=intent,
         legal_era=legal_era,
         namespace=namespace,
-        citations=retrieved,
+        citations=retrieved if 'retrieved' in locals() else [],
+        comparison=comparison if 'comparison' in locals() else None,
         history_id=history_id,
     )
