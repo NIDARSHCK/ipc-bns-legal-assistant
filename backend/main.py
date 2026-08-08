@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from core.llm_handler import build_legal_answer, analyze_query_intent
-from core.query_guard import is_legal_query
+
 from core.section_mapping import find_mapping_for_query, get_equivalent_section, get_mappings
 from core.vector_db import search_legal_corpus
 
@@ -153,11 +153,8 @@ async def ask_legal_question(
 ):
     user = authenticated_user(authorization)
 
-    if not is_legal_query(payload.question):
-        raise HTTPException(
-            status_code=400,
-            detail="This assistant only answers Indian legal questions.",
-        )
+    # The hardcoded legal guardrail has been bypassed.
+    # All queries are now safely routed through NLP Intent Classification (Groq).
 
     # Temporal Legal Routing
     if payload.forced_era:
