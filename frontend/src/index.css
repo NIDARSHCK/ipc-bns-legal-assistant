@@ -476,7 +476,7 @@ input:focus, textarea:focus {
 .auth-bg {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(to bottom, var(--bg-alpha-medium) 0%, var(--bg-primary) 100%), url('/assets/images/gavel-bg.jpg') center/cover;
+  background: linear-gradient(to bottom, var(--bg-alpha-medium) 0%, var(--bg-primary) 100%);
   z-index: 0;
 }
 
