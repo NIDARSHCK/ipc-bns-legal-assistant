@@ -27,7 +27,7 @@ app = FastAPI(
 origins = (
     os.getenv("ALLOWED_ORIGINS")
     or os.getenv("FRONTEND_ORIGINS")
-    or "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173"
+    or "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,https://ipc-bns-legal-assistant.vercel.app/"
 )
 
 allowed_origins = [
