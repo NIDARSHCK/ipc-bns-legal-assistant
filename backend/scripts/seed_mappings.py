@@ -1,4 +1,9 @@
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
+
+# Add backend directory to path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from core.section_mapping import get_mappings
 from database.supabase_db import supabase

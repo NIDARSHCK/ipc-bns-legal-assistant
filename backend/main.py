@@ -24,14 +24,21 @@ app = FastAPI(
     version="2.0.1",
 )
 
+origins = (
+    os.getenv("ALLOWED_ORIGINS")
+    or os.getenv("FRONTEND_ORIGINS")
+    or "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,https://ipc-bns-legal-assistant.vercel.app"
+)
+
+allowed_origins = [
+    origin.strip().rstrip("/")
+    for origin in origins.split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://ipc-bns-legal-assistant.vercel.app",
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
