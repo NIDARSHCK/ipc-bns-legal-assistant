@@ -29,7 +29,7 @@ load_dotenv()
 
 INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "legal-assistant")
 TEXT_FIELD = "chunk_text"
-MIN_MATCH_SCORE = float(os.getenv("PINECONE_MIN_MATCH_SCORE", "0.45"))
+MIN_MATCH_SCORE = float(os.getenv("PINECONE_MIN_MATCH_SCORE", "0.20"))
 EMBED_MODEL = os.getenv("PINECONE_EMBED_MODEL", "llama-text-embed-v2")
 
 
@@ -112,6 +112,8 @@ def search_legal_corpus(
 
     results = []
     seen_ids = set()
+    raw_scores = []
+    
     for hit in all_hits:
         hit_id = hit.get("_id") or hit.get("id")
         if hit_id in seen_ids:
@@ -119,8 +121,11 @@ def search_legal_corpus(
         seen_ids.add(hit_id)
         
         score = hit.get("_score") or hit.get("score") or 0
+        raw_scores.append(score)
+        
         if score < MIN_MATCH_SCORE:
             continue
+            
         fields = hit.get("fields") or hit.get("metadata") or {}
         results.append(
             {
@@ -135,7 +140,26 @@ def search_legal_corpus(
         )
         
     results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:top_k]
+    results = results[:top_k]
+    
+    # Structured logging for debugging
+    print("\n" + "="*50)
+    print("PINECONE DIAGNOSTIC LOG")
+    print("="*50)
+    print(f"QUERY: {query}")
+    print(f"NAMESPACE FILTER: {namespace}")
+    print(f"EXACT SECTION: {exact_section}")
+    print(f"EMBEDDING MODEL: {EMBED_MODEL}")
+    print(f"PINECONE INDEX: {INDEX_NAME}")
+    print(f"RAW HITS COUNT: {len(all_hits)}")
+    if raw_scores:
+        print("TOP 5 RAW SCORES:", sorted(raw_scores, reverse=True)[:5])
+    print(f"ACCEPTED RESULTS (score >= {MIN_MATCH_SCORE}): {len(results)}")
+    for i, res in enumerate(results):
+        print(f"  Result {i+1}: Score={res['score']:.4f} | Act={res['act']} | Sec={res['section']} | Title={res['title']}")
+    print("="*50 + "\n")
+    
+    return results
 
 
 def upsert_chunks(namespace: str, chunks: Iterable[dict]) -> None:

@@ -78,7 +78,7 @@ def save_query(
         return history_id
 
     result = (
-        client.table("chat_history")
+        client.table("query_history")
         .insert(
             {
                 "user_id": user_id,
@@ -101,7 +101,7 @@ def get_user_history(user_id: str) -> list[dict]:
     if not client:
         return [item for item in LOCAL_HISTORY if item["user_id"] == user_id][:50]
     result = (
-        client.table("chat_history")
+        client.table("query_history")
         .select("id, question, answer, incident_date, legal_era, citations, created_at")
         .eq("user_id", user_id)
         .order("created_at", desc=True)
@@ -116,7 +116,7 @@ def get_all_history() -> list[dict]:
     if not client:
         return LOCAL_HISTORY[:200]
     result = (
-        client.table("chat_history")
+        client.table("query_history")
         .select("id, user_id, question, answer, incident_date, legal_era, citations, created_at")
         .order("created_at", desc=True)
         .limit(200)
