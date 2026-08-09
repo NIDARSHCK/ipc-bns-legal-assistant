@@ -76,6 +76,16 @@ def search_legal_corpus(
     if not hasattr(idx, "search"):
         vector = embed_texts([query], input_type="query")[0]
 
+    import time
+    def run_with_retry(operation, *args, **kwargs):
+        for attempt in range(3):
+            try:
+                return operation(*args, **kwargs)
+            except Exception as e:
+                if attempt == 2:
+                    raise e
+                time.sleep(1.5 * (attempt + 1))
+
     for ns in namespaces_to_search:
         act = ns.split('_')[0].upper()
         
@@ -83,14 +93,16 @@ def search_legal_corpus(
         if exact_section:
             filter_exact = {"act": {"$eq": act}, "section": {"$eq": exact_section}}
             if hasattr(idx, "search"):
-                response = idx.search(
+                response = run_with_retry(
+                    idx.search,
                     namespace=ns,
                     query={"inputs": {"text": query}, "top_k": top_k, "filter": filter_exact},
                     fields=["act", "section", "title", "page", TEXT_FIELD],
                 )
                 all_hits.extend(response.get("result", {}).get("hits", []))
             else:
-                response = idx.query(
+                response = run_with_retry(
+                    idx.query,
                     namespace=ns, vector=vector, top_k=top_k, include_metadata=True, filter=filter_exact
                 )
                 all_hits.extend(response.get("matches", []))
@@ -98,14 +110,16 @@ def search_legal_corpus(
         # 2. Semantic search
         filter_semantic = {"act": {"$eq": act}}
         if hasattr(idx, "search"):
-            response = idx.search(
+            response = run_with_retry(
+                idx.search,
                 namespace=ns,
                 query={"inputs": {"text": query}, "top_k": top_k, "filter": filter_semantic},
                 fields=["act", "section", "title", "page", TEXT_FIELD],
             )
             all_hits.extend(response.get("result", {}).get("hits", []))
         else:
-            response = idx.query(
+            response = run_with_retry(
+                idx.query,
                 namespace=ns, vector=vector, top_k=top_k, include_metadata=True, filter=filter_semantic
             )
             all_hits.extend(response.get("matches", []))
@@ -212,11 +226,18 @@ def upsert_chunks(namespace: str, chunks: Iterable[dict]) -> None:
 
 
 def embed_texts(texts: list[str], input_type: str) -> list[list[float]]:
-    response = pinecone_client().inference.embed(
-        model=EMBED_MODEL,
-        inputs=texts,
-        parameters={"input_type": input_type},
-    )
-    return [item["values"] for item in response.data]
+    import time
+    for attempt in range(3):
+        try:
+            response = pinecone_client().inference.embed(
+                model=EMBED_MODEL,
+                inputs=texts,
+                parameters={"input_type": input_type},
+            )
+            return [item["values"] for item in response.data]
+        except Exception as e:
+            if attempt == 2:
+                raise e
+            time.sleep(1.5 * (attempt + 1))
 
 

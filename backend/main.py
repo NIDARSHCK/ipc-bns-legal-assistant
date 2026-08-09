@@ -202,9 +202,34 @@ async def ask_legal_question(
             namespace=None, # Allow searching across both namespaces
             exact_section=exact_section,
         )
+    except Exception as e:
+        print(f"Pinecone retrieval error: {e}")
+        return AskResponse(
+            answer={
+                "direct_answer": "The legal vector database is currently experiencing a temporary connection issue (502 Bad Gateway). This usually resolves in a few moments as the system warms up.",
+                "relevant_law": "N/A",
+                "what_it_means": "Please wait a few seconds and try your query again.",
+                "how_it_relates": "N/A"
+            },
+            intent=intent,
+            legal_era=legal_era,
+            namespace=namespace,
+            citations=[],
+            comparison=None,
+            history_id=None,
+            query=payload.question,
+            expanded_query=optimized_query,
+            disclaimer="System temporarily unavailable."
+        )
 
+    try:
         if not retrieved:
-            answer = "I couldn't find a sufficiently relevant source in the available legal documents."
+            answer = {
+                "direct_answer": "I couldn't find a sufficiently relevant source in the available legal documents.",
+                "relevant_law": "N/A",
+                "what_it_means": "No legal provision matched the query.",
+                "how_it_relates": "N/A"
+            }
             comparison = None
         else:
             try:
@@ -253,10 +278,24 @@ async def ask_legal_question(
         raise
 
     except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"RAG pipeline failed: {exc}",
-        ) from exc
+        print(f"RAG pipeline error: {exc}")
+        return AskResponse(
+            answer={
+                "direct_answer": "The AI generation service (Groq) is currently experiencing a temporary connection issue. This usually resolves in a few moments.",
+                "relevant_law": "N/A",
+                "what_it_means": "Please wait a few seconds and try your query again.",
+                "how_it_relates": "N/A"
+            },
+            intent=intent,
+            legal_era=legal_era,
+            namespace=namespace,
+            citations=retrieved if 'retrieved' in locals() else [],
+            comparison=None,
+            history_id=None,
+            query=payload.question,
+            expanded_query=optimized_query,
+            disclaimer="System temporarily unavailable."
+        )
 
     # Store Query History
     history_id = None
