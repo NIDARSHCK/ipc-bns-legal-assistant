@@ -323,7 +323,8 @@ async def ask_legal_question(
             print(f"       Metadata: Page {c.get('page')}, Year {c.get('year')}, Status {c.get('status')}")
     else:
         print("retrieved documents: 0")
-    print(f"final decision: {answer[:100]}...")
+    answer_preview = str(answer)
+    print(f"final decision: {answer_preview[:100]}...")
     print("="*50 + "\n")
 
     return AskResponse(
