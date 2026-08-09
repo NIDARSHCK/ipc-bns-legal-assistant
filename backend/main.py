@@ -173,7 +173,12 @@ async def ask_legal_question(
     optimized_query = intent_data.get("optimized_query") or payload.question
 
     if intent == "greeting":
-        answer = "Hello! I'm NyayaSetu Legal AI. You can ask me about IPC and BNS provisions, offences, punishments, or comparisons."
+        answer = {
+            "direct_answer": "Hello! I'm NyayaSetu Legal AI. You can ask me about IPC and BNS provisions, offences, punishments, or comparisons.",
+            "relevant_law": "N/A",
+            "what_it_means": "I am an AI assistant designed to help with Indian legal research.",
+            "how_it_relates": "N/A"
+        }
         return AskResponse(
             answer=answer,
             intent=intent,
@@ -181,7 +186,10 @@ async def ask_legal_question(
             namespace=namespace,
             citations=[],
             comparison=None,
-            history_id=None
+            history_id=None,
+            query=payload.question,
+            expanded_query=optimized_query,
+            disclaimer="This information is for general legal information and is not a substitute for professional legal advice."
         )
 
     # Regex Exact Section Detection
