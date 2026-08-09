@@ -1,4 +1,5 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+const defaultUrl = import.meta.env.PROD ? "https://ipc-bns-legal-assistant.onrender.com" : "http://127.0.0.1:8000";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || defaultUrl).replace(/\/+$/, "");
 
 // Helper to safely parse JSON or throw a readable error if the backend returns HTML (e.g. 502 Bad Gateway)
 async function fetchWithJson(url, options = {}) {
