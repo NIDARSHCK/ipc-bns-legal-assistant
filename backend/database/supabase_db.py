@@ -51,14 +51,19 @@ def get_user_from_token(token: Optional[str]) -> Optional[dict]:
         return None
 
 
+import json
+from typing import Optional, Any
+
 def save_query(
     user_id: Optional[str],
     question: str,
-    answer: str,
+    answer: Any,
     incident_date: str,
     legal_era: str,
     citations: list[dict],
 ) -> Optional[str]:
+    if isinstance(answer, dict):
+        answer = json.dumps(answer)
     client = supabase()
     if not client or not user_id:
         history_id = str(uuid4())
@@ -108,7 +113,14 @@ def get_user_history(user_id: str) -> list[dict]:
         .limit(50)
         .execute()
     )
-    return result.data or []
+    history = result.data or []
+    for item in history:
+        if isinstance(item.get("answer"), str) and item["answer"].strip().startswith("{"):
+            try:
+                item["answer"] = json.loads(item["answer"])
+            except Exception:
+                pass
+    return history
 
 
 def get_all_history() -> list[dict]:
@@ -122,4 +134,11 @@ def get_all_history() -> list[dict]:
         .limit(200)
         .execute()
     )
-    return result.data or []
+    history = result.data or []
+    for item in history:
+        if isinstance(item.get("answer"), str) and item["answer"].strip().startswith("{"):
+            try:
+                item["answer"] = json.loads(item["answer"])
+            except Exception:
+                pass
+    return history

@@ -238,10 +238,16 @@ async def ask_legal_question(
                 bns_sec = mapping["bns_section"]
                 title = mapping["bns_title"] if legal_era == "BNS" else mapping["ipc_title"]
                 
+                mapping_text = ""
                 if legal_era == "IPC":
-                    answer += f"\n\n**Section Mapping:** IPC Section {ipc_sec} maps to **BNS Section {bns_sec}** ({title}). Note: {mapping['notes']}"
+                    mapping_text = f"Section Mapping: IPC Section {ipc_sec} maps to BNS Section {bns_sec} ({title}). Note: {mapping['notes']}"
                 else:
-                    answer += f"\n\n**Section Mapping:** BNS Section {bns_sec} maps to **IPC Section {ipc_sec}** ({title}). Note: {mapping['notes']}"
+                    mapping_text = f"Section Mapping: BNS Section {bns_sec} maps to IPC Section {ipc_sec} ({title}). Note: {mapping['notes']}"
+                
+                if isinstance(answer, dict):
+                    answer["section_mapping"] = mapping_text
+                else:
+                    answer += f"\n\n{mapping_text}"
 
     except HTTPException:
         raise
