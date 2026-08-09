@@ -121,7 +121,22 @@ export default function Chat({
                 </div>
                 
                 <div style={{ whiteSpace: "pre-wrap" }}>
-                  {typeof result.answer === 'string' ? result.answer : "Invalid response format received."}
+                  {typeof result.answer === 'string' ? result.answer : (
+                    typeof result.answer === 'object' && result.answer !== null ? (
+                      <div className="structured-answer" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        {Object.entries(result.answer).map(([key, value]) => (
+                          <div key={key}>
+                            <h3 style={{ color: "var(--accent-gold)", marginBottom: "6px", fontSize: "16px", textTransform: "capitalize", borderBottom: "1px solid var(--border-color)", paddingBottom: "4px" }}>
+                              {key.replace(/_/g, ' ')}
+                            </h3>
+                            <div style={{ paddingLeft: "8px", borderLeft: "2px solid var(--accent-gold)", color: "var(--text-primary)" }}>
+                              {typeof value === 'string' ? value : JSON.stringify(value)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : "Invalid response format received."
+                  )}
                 </div>
                 
                 {result.comparison && (

@@ -1,7 +1,7 @@
 import re
 import os
 from datetime import date
-from typing import Optional
+from typing import Optional, Any
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,7 +50,7 @@ class AskRequest(BaseModel):
 
 
 class AskResponse(BaseModel):
-    answer: str
+    answer: Any
     intent: str
     legal_era: str
     namespace: str

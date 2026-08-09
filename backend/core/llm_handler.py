@@ -106,9 +106,20 @@ async def build_legal_answer(
         
         Return ONLY a JSON object with this exact schema:
         {
-          "answer": "Format EXACTLY with these markdown sections:\n\n**Relevant Law**\n...\n\n**What it means**\n...\n\n**How it relates**\n...\n\n**Punishment / consequence**\n...\n\n**Important**\n...\n\n**Source**\n...\n\n**Disclaimer**\nThis information is for general legal information and is not a substitute for professional legal advice.",
-          "comparison": null  // Set this ONLY if specifically asked to compare, or if a clear mapping exists IN THE CONTEXT. Do not hallucinate IPC-BNS mappings.
+          "answer": {
+             "direct_answer": "A clear, natural-language explanation of the legal situation without markdown.",
+             "relevant_law": "Act, Section, Title.",
+             "what_it_means": "Explanation of the provision in simple language.",
+             "clauses": {"clause_name": "explanation"},
+             "how_it_relates": "How the retrieved law connects to the user's facts.",
+             "punishment": "Punishment details if explicitly supported.",
+             "important_notes": "Exceptions or conditions.",
+             "related_provisions": "Any genuinely relevant other provisions."
+          },
+          "comparison": null  
         }
+        
+        DO NOT use markdown like ** or ### in the values. Keep it clean text.
         
         If comparison is set, use this schema:
         "comparison": {
