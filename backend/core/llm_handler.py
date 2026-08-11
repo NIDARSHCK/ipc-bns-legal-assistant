@@ -1,13 +1,75 @@
 import os
-from textwrap import dedent
-
 import httpx
-from dotenv import load_dotenv
-
-load_dotenv()
-
+import json
+from textwrap import dedent
+from typing import Optional
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+INTENT_SYSTEM_PROMPT = dedent(
+    """
+    You are an Indian Legal NLP router.
+    Classify the user's intent into one of these EXACT categories:
+    - greeting (for hi, hello, who are you)
+    - legal_question (for general offenses, punishments, IPC/BNS sections)
+    - legal_situation (for "someone hit my car", "my neighbor is threatening me", "accident")
+    - comparison (explicitly asking to compare IPC and BNS)
+    - summarization (asking to summarize a law)
+    - general_information (general questions about the assistant)
+    - unsupported (non-legal questions like "how to cook")
+    
+    If it is a legal_question, legal_situation, or comparison, generate an "optimized_query" containing 4-8 highly relevant keywords (e.g., "cheating deception dishonest inducement IPC BNS offence", "rash driving negligence road accident BNS") to maximize vector search retrieval.
+    
+    Return ONLY a JSON object with this exact schema:
+    {
+        "intent": "string",
+        "optimized_query": "string (or null)"
+    }
+    """
+).strip()
+
+
+LEGAL_ANSWER_SYSTEM_PROMPT = dedent(
+    """
+    You are a careful Indian legal information assistant for the IPC to BNS transition.
+    You are working only from retrieved authoritative legal evidence.
+    Explain the retrieved law in clear language understandable to a common person.
+    
+    Answer ONLY from the retrieved context and conversation history. 
+    If the context is insufficient, say EXACTLY: "I couldn't find a sufficiently relevant source in the available legal documents."
+    NEVER invent section numbers, punishments, Gazette pages, case law, or citations.
+    Every legal claim must be supported by retrieved evidence.
+    
+    If the retrieved provision contains clauses or sub-clauses, explain each one separately.
+    Distinguish between what the law expressly states and an explanation of what it means.
+    Do not assume that an accident automatically establishes an offence.
+    Do not give definitive conclusions where the retrieved evidence does not support them.
+    
+    Return ONLY a JSON object with this exact schema:
+    {
+        "answer": {
+            "direct_answer": "Understanding Your Situation / Direct Answer",
+            "relevant_law": "Act, Section, Title.",
+            "what_it_means": "Detailed Explanation.",
+            "clauses": {"clause_name": "explanation"},
+            "how_it_relates": "How the retrieved law connects to the user's facts.",
+            "punishment": "Possible Consequences if explicitly supported.",
+            "important_notes": "Exceptions or conditions.",
+            "related_provisions": "Any genuinely relevant other provisions."
+        },
+        "comparison": null  
+    }
+    
+    DO NOT use markdown like ** or ### in the values. Keep it clean text.
+    Use natural paragraphs rather than short four-line summaries.
+    
+    If comparison is set or explicitly asked for, use this schema:
+    "comparison": {
+        "ipc": {"section": "number", "offence": "...", "punishment": "... (or null)"},
+        "bns": {"section": "number", "offence": "...", "punishment": "... (or null)"}
+    }
+    """
+).strip()
 
 
 async def analyze_query_intent(question: str) -> dict:
@@ -16,28 +78,6 @@ async def analyze_query_intent(question: str) -> dict:
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is missing in backend/.env")
         
-    system_prompt = dedent(
-        """
-        You are an Indian Legal NLP router.
-        Classify the user's intent into one of these EXACT categories:
-        - greeting (for hi, hello, who are you)
-        - legal_question (for general offenses, punishments, IPC/BNS sections)
-        - legal_situation (for "someone hit my car", "my neighbor is threatening me", "accident")
-        - comparison (explicitly asking to compare IPC and BNS)
-        - summarization (asking to summarize a law)
-        - general_information (general questions about the assistant)
-        - unsupported (non-legal questions like "how to cook")
-        
-        If it is a legal_question, legal_situation, or comparison, generate an "optimized_query" containing 4-8 highly relevant keywords (e.g., "cheating deception dishonest inducement IPC BNS offence", "rash driving negligence road accident BNS") to maximize vector search retrieval.
-        
-        Return ONLY a JSON object with this exact schema:
-        {
-          "intent": "string",
-          "optimized_query": "string (or null)"
-        }
-        """
-    ).strip()
-
     async with httpx.AsyncClient(timeout=10) as client:
         response = await client.post(
             GROQ_API_URL,
@@ -50,18 +90,36 @@ async def analyze_query_intent(question: str) -> dict:
                 "temperature": 0.0,
                 "response_format": {"type": "json_object"},
                 "messages": [
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": INTENT_SYSTEM_PROMPT},
                     {"role": "user", "content": question},
                 ],
             },
         )
         if response.status_code != 200:
             return {"intent": "legal_question", "optimized_query": question}
-        import json
         try:
             return json.loads(response.json()["choices"][0]["message"]["content"])
         except Exception:
             return {"intent": "legal_question", "optimized_query": question}
+
+
+def format_conversation_context(conversation: list[dict]) -> str:
+    """
+    Format previous conversation turns into a string for the LLM.
+    Limits to the last 5 turns to prevent context bloat.
+    """
+    if not conversation:
+        return ""
+        
+    recent_context = conversation[-5:]
+    formatted = []
+    
+    for msg in recent_context:
+        role = msg.get("role", "user").capitalize()
+        content = msg.get("content", "")
+        formatted.append(f"{role}:\n{content}")
+        
+    return "\n\n".join(formatted)
 
 
 def _format_context(chunks: list[dict]) -> str:
@@ -90,53 +148,29 @@ async def build_legal_answer(
     incident_date: str,
     legal_era: str,
     retrieved_chunks: list[dict],
+    conversation: Optional[list[dict]] = None
 ) -> dict:
     api_key = os.getenv("GROQ_API_KEY")
     model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is missing in backend/.env")
 
-    context = _format_context(retrieved_chunks)
-    system_prompt = dedent(
-        """
-        You are a careful Indian legal information assistant for the IPC to BNS transition.
-        Answer ONLY from the retrieved context. If the context is insufficient, say EXACTLY: "I couldn't find a sufficiently relevant source in the available legal documents."
-        NEVER invent section numbers, punishments, Gazette pages, mappings, or procedures.
-        Page numbers must come strictly from the retrieved metadata (e.g. source page).
-        
-        Return ONLY a JSON object with this exact schema:
-        {
-          "answer": {
-             "direct_answer": "A clear, natural-language explanation of the legal situation without markdown.",
-             "relevant_law": "Act, Section, Title.",
-             "what_it_means": "Explanation of the provision in simple language.",
-             "clauses": {"clause_name": "explanation"},
-             "how_it_relates": "How the retrieved law connects to the user's facts.",
-             "punishment": "Punishment details if explicitly supported.",
-             "important_notes": "Exceptions or conditions.",
-             "related_provisions": "Any genuinely relevant other provisions."
-          },
-          "comparison": null  
-        }
-        
-        DO NOT use markdown like ** or ### in the values. Keep it clean text.
-        
-        If comparison is set, use this schema:
-        "comparison": {
-            "ipc": {"section": "number", "offence": "...", "punishment": "... (or null)"},
-            "bns": {"section": "number", "offence": "...", "punishment": "... (or null)"}
-        }
-        """
-    ).strip()
-
+    legal_context = _format_context(retrieved_chunks)
+    history_context = format_conversation_context(conversation or [])
+    
     user_prompt = dedent(
         f"""
         Incident date: {incident_date}
         Applicable legal era: {legal_era}
-        User question: {question}
-
-        Retrieved context:
-        {context}
+        
+        Previous Conversation Context:
+        {history_context if history_context else "None"}
+        
+        Retrieved Legal Documents:
+        {legal_context}
+        
+        Current Question:
+        {question}
         """
     ).strip()
 
@@ -152,14 +186,13 @@ async def build_legal_answer(
                 "temperature": 0.1,
                 "response_format": {"type": "json_object"},
                 "messages": [
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": LEGAL_ANSWER_SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
             },
         )
         response.raise_for_status()
         data = response.json()
-        import json
         try:
             return json.loads(data["choices"][0]["message"]["content"])
         except Exception:

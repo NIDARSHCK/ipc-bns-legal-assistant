@@ -98,7 +98,7 @@ export default function Sidebar({ activeView, setActiveView, mobileOpen, setMobi
               </button>
             </div>
           ) : (
-            <button className="btn btn-primary" onClick={() => { setActiveView("auth"); setMobileOpen(false); }} style={{ width: "100%", padding: "12px", borderRadius: "var(--radius-md)" }}>
+            <button className="btn btn-primary" onClick={() => { setActiveView("signin"); setMobileOpen(false); }} style={{ width: "100%", padding: "12px", borderRadius: "var(--radius-md)" }}>
               <LogIn size={18} /> Sign In
             </button>
           )}

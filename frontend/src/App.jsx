@@ -12,9 +12,14 @@ import Sidebar from "./components/Sidebar";
 import Modal from "./components/Modal";
 import Home from "./pages/Home";
 import About from "./pages/About";
-import Auth from "./pages/Auth";
 import Chat from "./pages/Chat";
 import History from "./pages/History";
+
+import SignIn from "./auth/SignIn";
+import SignUp from "./auth/SignUp";
+import ForgotPassword from "./auth/ForgotPassword";
+import ResetPassword from "./auth/ResetPassword";
+import VerifyEmail from "./auth/VerifyEmail";
 
 const transitionDate = "2024-07-01";
 
@@ -65,7 +70,7 @@ export default function App() {
   const [forcedEra, setForcedEra] = useState(null);
   const [clarifyDate, setClarifyDate] = useState(null);
   const [showTransitionPopup, setShowTransitionPopup] = useState(false);
-  const [result, setResult] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(false);
@@ -120,22 +125,22 @@ export default function App() {
   }
 
   async function handleAuth(event) {
-    event.preventDefault();
+    event?.preventDefault();
     if (!supabase) {
       setAuthMessage("Supabase keys are not configured.");
       return;
     }
     setAuthMessage("");
     const action =
-      mode === "signin"
+      activeView === "signin"
         ? supabase.auth.signInWithPassword({ email, password })
         : supabase.auth.signUp({ email, password });
     const { error: authError } = await action;
     if (authError) {
       setAuthMessage(authError.message);
     } else {
-      if (mode === "signup") {
-        setAuthMessage("Account created. Please check your email if confirmation is required.");
+      if (activeView === "signup") {
+        setActiveView("verifyEmail");
       } else {
         setEmail("");
         setPassword("");
@@ -149,7 +154,7 @@ export default function App() {
     setSession(null);
     setProfile(null);
     setHistory([]);
-    setActiveView("auth");
+    setActiveView("signin");
   }
 
   async function submitQuestion(dateOverride, eraOverride) {
@@ -159,19 +164,36 @@ export default function App() {
 
     setLoading(true);
     setError("");
-    setResult(null);
+    const userQuestion = question;
+    setQuestion("");
+    
+    // Add user message immediately
+    const newUserMsg = { role: "user", content: userQuestion };
+    setMessages(prev => [...prev, newUserMsg]);
+
     try {
+      // Build conversation history for API (all previous messages except the one we just added)
+      const conversationContext = messages.map(m => ({
+        role: m.role,
+        content: typeof m.content === 'object' ? JSON.stringify(m.content) : m.content
+      }));
+
       const answer = await askLegalAssistant({
-        question,
+        question: userQuestion,
         incidentDate,
         forcedEra: era,
         accessToken: session?.access_token,
+        conversation: conversationContext
       });
-      setResult({ ...answer, question_asked: question });
-      setQuestion("");
+      
+      const newAssistantMsg = { role: "assistant", content: answer.answer, raw: answer };
+      setMessages(prev => [...prev, newAssistantMsg]);
+      
       await refreshSessionData(session.access_token);
     } catch (err) {
       setError(err.message);
+      // Remove the optimistic user message if it failed
+      setMessages(prev => prev.slice(0, -1));
     } finally {
       setLoading(false);
       setForcedEra(null);
@@ -181,7 +203,7 @@ export default function App() {
   function handleAsk(event) {
     event?.preventDefault();
     if (!isSignedIn) {
-      setActiveView("auth");
+      setActiveView("signin");
       return;
     }
     if (!question.trim()) return setError("Ask a legal question before sending.");
@@ -192,14 +214,21 @@ export default function App() {
   }
 
   function openHistoryItem(item) {
-    setResult({
-      question_asked: item.question,
-      answer: item.answer,
-      legal_era: item.legal_era,
-      namespace: item.legal_era?.toLowerCase(),
-      citations: item.citations || [],
-      history_id: item.id,
-    });
+    const rawAnswer = item.answer;
+    
+    // Convert history format to conversation format
+    setMessages([
+      { role: "user", content: item.question },
+      { role: "assistant", content: rawAnswer, raw: {
+          answer: rawAnswer,
+          legal_era: item.legal_era,
+          namespace: item.legal_era?.toLowerCase(),
+          citations: item.citations || [],
+          history_id: item.id,
+          comparison: item.comparison
+      }}
+    ]);
+    
     setIncidentDateText(item.incident_date || "2024-07-02");
     setActiveView("chat");
   }
@@ -228,20 +257,29 @@ export default function App() {
           </button>
         </div>
 
-        {activeView === "home" && <Home onStart={() => setActiveView(isSignedIn ? "chat" : "auth")} />}
+        {activeView === "home" && <Home onStart={() => setActiveView(isSignedIn ? "chat" : "signin")} />}
         {activeView === "about" && <About />}
-        {activeView === "auth" && (
-          <Auth 
-            mode={mode} 
-            setMode={setMode} 
-            email={email} 
-            setEmail={setEmail} 
-            password={password} 
-            setPassword={setPassword} 
-            handleAuth={handleAuth} 
-            authMessage={authMessage} 
+        
+        {activeView === "signin" && (
+          <SignIn 
+            email={email} setEmail={setEmail} 
+            password={password} setPassword={setPassword} 
+            handleAuth={handleAuth} authMessage={authMessage} 
+            navigateTo={setActiveView}
           />
         )}
+        {activeView === "signup" && (
+          <SignUp 
+            email={email} setEmail={setEmail} 
+            password={password} setPassword={setPassword} 
+            handleAuth={handleAuth} authMessage={authMessage} 
+            navigateTo={setActiveView}
+          />
+        )}
+        {activeView === "forgotPassword" && <ForgotPassword navigateTo={setActiveView} />}
+        {activeView === "resetPassword" && <ResetPassword navigateTo={setActiveView} />}
+        {activeView === "verifyEmail" && <VerifyEmail navigateTo={setActiveView} />}
+
         {activeView === "chat" && (
           <Chat 
             legalEra={legalEra} 
@@ -251,7 +289,7 @@ export default function App() {
             setQuestion={setQuestion} 
             handleAsk={handleAsk} 
             loading={loading} 
-            result={result} 
+            messages={messages} 
             error={error} 
           />
         )}

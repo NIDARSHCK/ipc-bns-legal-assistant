@@ -9,7 +9,7 @@ export default function Chat({
   setQuestion,
   handleAsk,
   loading,
-  result,
+  messages,
   error
 }) {
   const textareaRef = useRef(null);
@@ -50,7 +50,6 @@ export default function Chat({
             <span style={{ color: "var(--accent-gold)" }}>({legalEra})</span>
             <ChevronDown size={14} />
           </div>
-          {/* A mock hidden input layer on top of the button for easy date entry without building a complex dropdown component right now */}
           <input 
             type="date"
             value={incidentDateText}
@@ -61,7 +60,7 @@ export default function Chat({
       </div>
 
       <div className="chat-messages">
-        {!result && !error && !loading && (
+        {messages.length === 0 && !error && !loading && (
           <div className="welcome-section animate-slide-up">
             <h2>Welcome back.</h2>
             <p>Start researching Indian criminal law with AI assistance. Search IPC sections, compare BNS provisions, understand punishments, or explore legal transitions.</p>
@@ -105,86 +104,91 @@ export default function Chat({
           </div>
         )}
 
-        {result && (
-          <>
-            <div className="message-row message-row-user animate-slide-up">
-              <div className="message-bubble message-bubble-user">
-                {result.question_asked || "Prior query loaded."}
-              </div>
-            </div>
-
-            <div className="message-row animate-slide-up-delay">
-              <div className="message-bubble message-bubble-ai">
-                <div className="message-ai-header">
-                  <div className="avatar-ai"><Scale size={16}/></div>
-                  NyayaSetu
+        {messages.map((msg, index) => {
+          if (msg.role === "user") {
+            return (
+              <div key={index} className="message-row message-row-user animate-slide-up">
+                <div className="message-bubble message-bubble-user">
+                  {msg.content}
                 </div>
-                
-                <div style={{ whiteSpace: "pre-wrap" }}>
-                  {typeof result.answer === 'string' ? result.answer : (
-                    typeof result.answer === 'object' && result.answer !== null ? (
-                      <div className="structured-answer" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                        {Object.entries(result.answer).map(([key, value]) => (
-                          <div key={key}>
-                            <h3 style={{ color: "var(--accent-gold)", marginBottom: "6px", fontSize: "16px", textTransform: "capitalize", borderBottom: "1px solid var(--border-color)", paddingBottom: "4px" }}>
-                              {key.replace(/_/g, ' ')}
-                            </h3>
-                            <div style={{ paddingLeft: "8px", borderLeft: "2px solid var(--accent-gold)", color: "var(--text-primary)" }}>
-                              {typeof value === 'string' ? value : JSON.stringify(value)}
+              </div>
+            );
+          } else {
+            const raw = msg.raw || {};
+            return (
+              <div key={index} className="message-row animate-slide-up-delay">
+                <div className="message-bubble message-bubble-ai">
+                  <div className="message-ai-header">
+                    <div className="avatar-ai"><Scale size={16}/></div>
+                    NyayaSetu
+                  </div>
+                  
+                  <div style={{ whiteSpace: "pre-wrap" }}>
+                    {typeof msg.content === 'string' ? msg.content : (
+                      typeof msg.content === 'object' && msg.content !== null ? (
+                        <div className="structured-answer" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                          {Object.entries(msg.content).map(([key, value]) => (
+                            <div key={key}>
+                              <h3 style={{ color: "var(--accent-gold)", marginBottom: "6px", fontSize: "16px", textTransform: "capitalize", borderBottom: "1px solid var(--border-color)", paddingBottom: "4px" }}>
+                                {key.replace(/_/g, ' ')}
+                              </h3>
+                              <div style={{ paddingLeft: "8px", borderLeft: "2px solid var(--accent-gold)", color: "var(--text-primary)" }}>
+                                {typeof value === 'string' ? value : JSON.stringify(value)}
+                              </div>
                             </div>
+                          ))}
+                        </div>
+                      ) : "Invalid response format received."
+                    )}
+                  </div>
+                  
+                  {raw.comparison && (
+                    <div className="comparison-panel" style={{ marginTop: "24px", display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                      <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                        <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>IPC Section {raw.comparison.ipc?.section || "N/A"}</h4>
+                        <p><strong>Offence:</strong> {raw.comparison.ipc?.offence || "N/A"}</p>
+                        {raw.comparison.ipc?.punishment && <p><strong>Punishment:</strong> {raw.comparison.ipc.punishment}</p>}
+                      </div>
+                      <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                        <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>BNS Section {raw.comparison.bns?.section || "N/A"}</h4>
+                        <p><strong>Offence:</strong> {raw.comparison.bns?.offence || "N/A"}</p>
+                        {raw.comparison.bns?.punishment && <p><strong>Punishment:</strong> {raw.comparison.bns.punishment}</p>}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {raw.citations && raw.citations.length > 0 && (
+                    <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--border-color)" }}>
+                      <h4 style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        <BookOpen size={14} /> Source Citations
+                      </h4>
+                      <div style={{ display: "grid", gap: "12px" }}>
+                        {raw.citations.map((c, i) => (
+                          <div key={i} style={{ background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                            <strong style={{ display: "block", fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px" }}>
+                              {c.act} Section {c.section}: {c.title}
+                            </strong>
+                            <span style={{ display: "block", fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>
+                              {c.page && c.page !== "unknown" ? `Source page: ${c.page}` : ""} 
+                              {c.year ? ` • Year: ${c.year}` : ""}
+                              {c.score ? ` • Relevance: ${(c.score * 100).toFixed(1)}%` : ""}
+                            </span>
                           </div>
                         ))}
                       </div>
-                    ) : "Invalid response format received."
+                    </div>
+                  )}
+                  
+                  {raw.disclaimer && (
+                    <div style={{ marginTop: "24px", padding: "16px", background: "rgba(255, 193, 7, 0.1)", borderRadius: "8px", border: "1px solid rgba(255, 193, 7, 0.3)", color: "var(--text-secondary)", fontSize: "12px" }}>
+                      <strong>Disclaimer:</strong> {raw.disclaimer}
+                    </div>
                   )}
                 </div>
-                
-                {result.comparison && (
-                  <div className="comparison-panel" style={{ marginTop: "24px", display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                    <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
-                      <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>IPC Section {result.comparison.ipc?.section || "N/A"}</h4>
-                      <p><strong>Offence:</strong> {result.comparison.ipc?.offence || "N/A"}</p>
-                      {result.comparison.ipc?.punishment && <p><strong>Punishment:</strong> {result.comparison.ipc.punishment}</p>}
-                    </div>
-                    <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
-                      <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>BNS Section {result.comparison.bns?.section || "N/A"}</h4>
-                      <p><strong>Offence:</strong> {result.comparison.bns?.offence || "N/A"}</p>
-                      {result.comparison.bns?.punishment && <p><strong>Punishment:</strong> {result.comparison.bns.punishment}</p>}
-                    </div>
-                  </div>
-                )}
-                
-                {result.citations && result.citations.length > 0 && (
-                  <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--border-color)" }}>
-                    <h4 style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      <BookOpen size={14} /> Source Citations
-                    </h4>
-                    <div style={{ display: "grid", gap: "12px" }}>
-                      {result.citations.map((c, i) => (
-                        <div key={i} style={{ background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
-                          <strong style={{ display: "block", fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px" }}>
-                            {c.act} Section {c.section}: {c.title}
-                          </strong>
-                          <span style={{ display: "block", fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>
-                            {c.page && c.page !== "unknown" ? `Source page: ${c.page}` : ""} 
-                            {c.year ? ` • Year: ${c.year}` : ""}
-                            {c.score ? ` • Relevance: ${(c.score * 100).toFixed(1)}%` : ""}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {result.disclaimer && (
-                  <div style={{ marginTop: "24px", padding: "16px", background: "rgba(255, 193, 7, 0.1)", borderRadius: "8px", border: "1px solid rgba(255, 193, 7, 0.3)", color: "var(--text-secondary)", fontSize: "12px" }}>
-                    <strong>Disclaimer:</strong> {result.disclaimer}
-                  </div>
-                )}
               </div>
-            </div>
-          </>
-        )}
+            );
+          }
+        })}
 
         {loading && (
           <div className="message-row animate-slide-up">
