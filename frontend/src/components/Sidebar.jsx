@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Scale, Home, MessageSquare, History, Info, LogOut, LogIn, X, User, Settings, ChevronUp, ChevronDown, Sun, Moon } from "lucide-react";
 
-export default function Sidebar({ activeView, setActiveView, mobileOpen, setMobileOpen, isSignedIn, handleSignOut, profile, theme, toggleTheme }) {
+export default function Sidebar({ activeView, setActiveView, mobileOpen, setMobileOpen, isSignedIn, handleSignOut, profile, theme, toggleTheme, handleNewChat }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   const navItems = [
     { id: "home", label: "Home", icon: Home },
-    { id: "chat", label: "Legal Assistant", icon: MessageSquare },
+    { id: "new_chat", label: "New Chat", icon: MessageSquare, action: handleNewChat },
+    { id: "chat", label: "Current Chat", icon: MessageSquare },
     { id: "history", label: "Chat History", icon: History },
     { id: "about", label: "About Us", icon: Info },
   ];
@@ -45,8 +46,12 @@ export default function Sidebar({ activeView, setActiveView, mobileOpen, setMobi
                 key={item.id}
                 className={`nav-item ${activeView === item.id ? "active" : ""}`}
                 onClick={() => {
-                  setActiveView(item.id);
-                  setMobileOpen(false);
+                  if (item.action) {
+                    item.action();
+                  } else {
+                    setActiveView(item.id);
+                    setMobileOpen(false);
+                  }
                 }}
               >
                 <Icon size={18} />

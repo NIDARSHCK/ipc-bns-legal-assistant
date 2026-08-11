@@ -10,7 +10,8 @@ export default function Chat({
   handleAsk,
   loading,
   messages,
-  error
+  error,
+  handleNewChat
 }) {
   const textareaRef = useRef(null);
 
@@ -44,18 +45,27 @@ export default function Chat({
             AI-powered IPC ↔ BNS Legal Research Assistant
           </div>
         </div>
-        <div style={{ position: 'relative' }}>
-          <div className="chat-filter-btn" title="Set Incident Date">
-            <span>Date: {incidentDateText || "Any"}</span>
-            <span style={{ color: "var(--accent-gold)" }}>({legalEra})</span>
-            <ChevronDown size={14} />
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button 
+            onClick={handleNewChat}
+            className="btn btn-outline" 
+            style={{ padding: '6px 12px', fontSize: '13px', height: '32px' }}
+          >
+            + New Chat
+          </button>
+          <div style={{ position: 'relative' }}>
+            <div className="chat-filter-btn" title="Set Incident Date">
+              <span>Date: {incidentDateText || "Any"}</span>
+              <span style={{ color: "var(--accent-gold)" }}>({legalEra})</span>
+              <ChevronDown size={14} />
+            </div>
+            <input 
+              type="date"
+              value={incidentDateText}
+              onChange={(e) => setIncidentDateText(e.target.value)}
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+            />
           </div>
-          <input 
-            type="date"
-            value={incidentDateText}
-            onChange={(e) => setIncidentDateText(e.target.value)}
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
-          />
         </div>
       </div>
 
@@ -143,17 +153,36 @@ export default function Chat({
                   </div>
                   
                   {raw.comparison && (
-                    <div className="comparison-panel" style={{ marginTop: "24px", display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                      <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
-                        <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>IPC Section {raw.comparison.ipc?.section || "N/A"}</h4>
-                        <p><strong>Offence:</strong> {raw.comparison.ipc?.offence || "N/A"}</p>
-                        {raw.comparison.ipc?.punishment && <p><strong>Punishment:</strong> {raw.comparison.ipc.punishment}</p>}
+                    <div className="comparison-panel" style={{ marginTop: "24px" }}>
+                      <h3 style={{ color: "var(--accent-gold)", marginBottom: "12px", fontSize: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>Legal Comparison: IPC ↔ BNS</h3>
+                      {raw.comparison.summary && (
+                        <div style={{ marginBottom: "16px", padding: "12px", background: "var(--bg-secondary)", borderRadius: "8px", color: "var(--text-primary)", fontSize: "14px", lineHeight: 1.6 }}>
+                          <strong>Summary: </strong> {raw.comparison.summary}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                        <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                          <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>IPC Section {raw.comparison.ipc?.section || "N/A"}</h4>
+                          <p><strong>Offence:</strong> {raw.comparison.ipc?.offence || "N/A"}</p>
+                          {raw.comparison.ipc?.punishment && <p><strong>Punishment:</strong> {raw.comparison.ipc.punishment}</p>}
+                        </div>
+                        <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                          <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>BNS Section {raw.comparison.bns?.section || "N/A"}</h4>
+                          <p><strong>Offence:</strong> {raw.comparison.bns?.offence || "N/A"}</p>
+                          {raw.comparison.bns?.punishment && <p><strong>Punishment:</strong> {raw.comparison.bns.punishment}</p>}
+                        </div>
                       </div>
-                      <div className="comp-box" style={{ flex: "1 1 250px", background: "var(--bg-secondary)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
-                        <h4 style={{ color: "var(--accent-gold)", marginBottom: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>BNS Section {raw.comparison.bns?.section || "N/A"}</h4>
-                        <p><strong>Offence:</strong> {raw.comparison.bns?.offence || "N/A"}</p>
-                        {raw.comparison.bns?.punishment && <p><strong>Punishment:</strong> {raw.comparison.bns.punishment}</p>}
-                      </div>
+                    </div>
+                  )}
+
+                  {raw.answer && raw.answer.section_mapping && (
+                    <div style={{ marginTop: "24px", padding: "16px", background: "rgba(33, 150, 243, 0.05)", borderRadius: "8px", border: "1px solid rgba(33, 150, 243, 0.2)" }}>
+                      <h4 style={{ color: "#2196f3", marginBottom: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <RefreshCw size={16} /> Section Mapping Details
+                      </h4>
+                      <p style={{ fontSize: "14px", color: "var(--text-primary)", lineHeight: 1.6 }}>
+                        {raw.answer.section_mapping}
+                      </p>
                     </div>
                   )}
                   

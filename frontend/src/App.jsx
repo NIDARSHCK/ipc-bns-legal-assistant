@@ -92,16 +92,28 @@ export default function App() {
       setToast("WARNING: Supabase is not configured. Auth will fail.");
       return;
     }
+
+    // Check URL hash for Supabase password recovery on load
+    const hash = window.location.hash;
+    if (hash && hash.includes("type=recovery")) {
+      setActiveView("resetPassword");
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
+      if (event === "PASSWORD_RECOVERY") {
+        setActiveView("resetPassword");
+      }
       if (!nextSession) {
         setProfile(null);
         setHistory([]);
       }
     });
+
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -122,6 +134,13 @@ export default function App() {
       console.error("Session data fetch error:", err);
       setToast(`Failed to load data: ${err.message}`);
     }
+  }
+
+  function handleNewChat() {
+    setMessages([]);
+    setQuestion("");
+    setActiveView("chat");
+    setMobileOpen(false);
   }
 
   async function handleAuth(event) {
@@ -245,6 +264,7 @@ export default function App() {
         profile={profile}
         theme={theme}
         toggleTheme={toggleTheme}
+        handleNewChat={handleNewChat}
       />
 
       <div className="main-content">
@@ -291,6 +311,7 @@ export default function App() {
             loading={loading} 
             messages={messages} 
             error={error} 
+            handleNewChat={handleNewChat}
           />
         )}
         {activeView === "history" && (

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Scale, Mail } from "lucide-react";
+import { AlertCircle, Scale, Mail, Send } from "lucide-react";
 import { supabase } from "../services/supabase";
 
 export default function ForgotPassword({ navigateTo }) {
@@ -27,36 +27,61 @@ export default function ForgotPassword({ navigateTo }) {
   }
 
   return (
-    <div className="auth-container animate-slide-up">
-      <div className="auth-card">
-        <div className="auth-header">
-          <Scale size={32} color="var(--accent-gold)" />
-          <h2>Reset Password</h2>
-          <p>Enter your email to receive recovery instructions</p>
-        </div>
-        
-        {error && <div className="auth-error">{error}</div>}
-        {message && <div style={{ padding: "12px", background: "rgba(76, 175, 80, 0.1)", border: "1px solid rgba(76, 175, 80, 0.3)", borderRadius: "8px", color: "#4caf50", marginBottom: "16px", fontSize: "14px" }}>{message}</div>}
-
-        <form onSubmit={handleReset} className="auth-form">
-          <div className="form-group">
-            <label>Email Address</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="advocate@example.com"
-              required
-            />
+    <div className="main-content">
+      <div className="auth-wrapper">
+        <div className="auth-bg"></div>
+        <div className="auth-card-glass animate-slide-up">
+          <div className="auth-header">
+            <Scale size={48} color="var(--accent-gold)" />
+            <h2>Reset Password</h2>
+            <p style={{ color: "var(--text-secondary)", marginTop: "8px" }}>
+              Enter your email to receive recovery instructions
+            </p>
           </div>
-          <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: "12px" }} disabled={loading}>
-            {loading ? "Sending..." : "Send Instructions"}
-          </button>
-        </form>
+          
+          <form onSubmit={handleReset}>
+            {error && (
+              <div className="auth-error">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
+            {message && (
+              <div style={{ padding: "12px", background: "rgba(76, 175, 80, 0.1)", border: "1px solid rgba(76, 175, 80, 0.3)", borderRadius: "8px", color: "#4caf50", marginBottom: "16px", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <AlertCircle size={18} /> {message}
+              </div>
+            )}
 
-        <div className="auth-footer">
-          Remember your password?{" "}
-          <button onClick={() => navigateTo("signin")}>Sign in</button>
+            <div className="form-group">
+              <label>Email Address</label>
+              <div className="input-icon-wrapper">
+                <Mail size={18} />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="advocate@example.com"
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn btn-primary" style={{ width: "100%", marginBottom: "24px", height: "52px", fontSize: "16px" }} disabled={loading}>
+              <Send size={20} />
+              {loading ? "Sending..." : "Send Instructions"}
+            </button>
+
+            <div style={{ textAlign: "center", borderTop: "1px solid var(--border-color)", paddingTop: "24px" }}>
+              <button 
+                className="btn-ghost" 
+                type="button" 
+                style={{ fontSize: "15px", fontWeight: 500 }}
+                onClick={() => navigateTo("signin")}
+              >
+                Remember your password? Sign In
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

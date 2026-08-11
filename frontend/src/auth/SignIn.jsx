@@ -1,60 +1,90 @@
 import React from "react";
-import { Scale } from "lucide-react";
+import { AlertCircle, LogIn, Scale, Mail, Lock } from "lucide-react";
 
 export default function SignIn({ email, setEmail, password, setPassword, handleAuth, authMessage, navigateTo }) {
-  return (
-    <div className="auth-container animate-slide-up">
-      <div className="auth-card">
-        <div className="auth-header">
-          <Scale size={32} color="var(--accent-gold)" />
-          <h2>Welcome Back</h2>
-          <p>Sign in to your NyayaSetu account</p>
-        </div>
-        
-        {authMessage && (
-          <div className="auth-error">
-            {authMessage}
-          </div>
-        )}
+  const [showPassword, setShowPassword] = React.useState(false);
 
-        <form onSubmit={handleAuth} className="auth-form">
-          <div className="form-group">
-            <label>Email Address</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="advocate@example.com"
-              required
-            />
+  return (
+    <div className="main-content">
+      <div className="auth-wrapper">
+        <div className="auth-bg"></div>
+        <div className="auth-card-glass animate-slide-up">
+          <div className="auth-header">
+            <Scale size={48} color="var(--accent-gold)" />
+            <h2>Welcome Back</h2>
+            <p style={{ color: "var(--text-secondary)", marginTop: "8px" }}>
+              Sign in to your secure legal workspace
+            </p>
           </div>
-          <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          
+          <form onSubmit={handleAuth}>
+            {authMessage && (
+              <div className="auth-error">
+                <AlertCircle size={18} />
+                {authMessage}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label>Email Address</label>
+              <div className="input-icon-wrapper">
+                <Mail size={18} />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="advocate@example.com"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
               <label>Password</label>
+              <div className="input-icon-wrapper">
+                <Lock size={18} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ position: "absolute", right: "16px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
+                >
+                  <span style={{ fontSize: "12px", fontWeight: "bold" }}>{showPassword ? "HIDE" : "SHOW"}</span>
+                </button>
+              </div>
+              <div style={{ textAlign: "right", marginTop: "8px" }}>
+                <button 
+                  type="button" 
+                  onClick={() => navigateTo("forgotPassword")}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-gold)', fontSize: '13px', fontWeight: 500, cursor: 'pointer', padding: 0 }}
+                >
+                  Forgot Password?
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" className="btn btn-primary" style={{ width: "100%", marginBottom: "24px", height: "52px", fontSize: "16px" }}>
+              <LogIn size={20} />
+              Sign In
+            </button>
+
+            <div style={{ textAlign: "center", borderTop: "1px solid var(--border-color)", paddingTop: "24px" }}>
               <button 
+                className="btn-ghost" 
                 type="button" 
-                onClick={() => navigateTo("forgotPassword")}
-                style={{ background: 'none', border: 'none', color: 'var(--accent-gold)', fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                style={{ fontSize: "15px", fontWeight: 500 }}
+                onClick={() => navigateTo("signup")}
               >
-                Forgot password?
+                Don't have an account? Sign Up
               </button>
             </div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </div>
-          <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: "12px" }}>
-            Sign In
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          Don't have an account?{" "}
-          <button onClick={() => navigateTo("signup")}>Sign up</button>
+          </form>
         </div>
       </div>
     </div>
