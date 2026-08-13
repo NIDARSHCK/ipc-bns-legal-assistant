@@ -75,7 +75,7 @@ LEGAL_ANSWER_SYSTEM_PROMPT = dedent(
 
 async def analyze_query_intent(question: str) -> dict:
     api_key = os.getenv("GROQ_API_KEY")
-    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is missing in backend/.env")
         
@@ -152,7 +152,7 @@ async def build_legal_answer(
     conversation: Optional[list[dict]] = None
 ) -> dict:
     api_key = os.getenv("GROQ_API_KEY")
-    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is missing in backend/.env")
 
