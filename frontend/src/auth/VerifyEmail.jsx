@@ -1,7 +1,30 @@
-import React from "react";
-import { Scale, MailCheck, ArrowLeft } from "lucide-react";
+import React, { useState } from "react";
+import { Scale, MailCheck, ArrowLeft, Send } from "lucide-react";
+import { supabase } from "../services/supabase";
 
-export default function VerifyEmail({ navigateTo }) {
+export default function VerifyEmail({ navigateTo, email }) {
+  const [resending, setResending] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const handleResend = async () => {
+    if (!email) {
+      setMessage("Email address not found. Please try signing up again.");
+      return;
+    }
+    setResending(true);
+    setMessage("");
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email,
+    });
+    if (error) {
+      setMessage(`Error: ${error.message}`);
+    } else {
+      setMessage("Verification email has been resent!");
+    }
+    setResending(false);
+  };
+
   return (
     <div className="main-content">
       <div className="auth-wrapper">
@@ -15,16 +38,27 @@ export default function VerifyEmail({ navigateTo }) {
           </div>
           
           <div className="auth-header" style={{ alignItems: "center" }}>
-            <h2>Check Your Email</h2>
+            <h2>Account created successfully.</h2>
             <p style={{ color: "var(--text-secondary)", marginTop: "8px" }}>
-              We've sent a confirmation link to your email address.
+              Please check your email and verify your email address before signing in.
             </p>
           </div>
           
+          {message && (
+            <div style={{ padding: "12px", background: message.startsWith("Error") ? "rgba(244, 67, 54, 0.1)" : "rgba(76, 175, 80, 0.1)", color: message.startsWith("Error") ? "#f44336" : "#4caf50", borderRadius: "8px", marginBottom: "16px", fontSize: "14px" }}>
+              {message}
+            </div>
+          )}
+
           <div style={{ padding: "24px 0", color: "var(--text-primary)", fontSize: "15px", lineHeight: "1.6" }}>
-            Please click the link in the email to verify your account and sign in.
+            We've sent a confirmation link to <strong>{email || "your email"}</strong>.
             If you don't see it, check your spam folder.
           </div>
+
+          <button onClick={handleResend} className="btn btn-primary" style={{ width: "100%", marginTop: "12px", height: "52px", fontSize: "16px" }} disabled={resending}>
+            <Send size={18} />
+            {resending ? "Resending..." : "Resend Verification Email"}
+          </button>
 
           <button onClick={() => navigateTo("signin")} className="btn btn-outline" style={{ width: "100%", marginTop: "12px", height: "52px", fontSize: "16px" }}>
             <ArrowLeft size={18} />

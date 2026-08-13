@@ -3,6 +3,18 @@ import { AlertCircle, UserPlus, Scale, Mail, Lock } from "lucide-react";
 
 export default function SignUp({ email, setEmail, password, setPassword, handleAuth, authMessage, navigateTo }) {
   const [showPassword, setShowPassword] = React.useState(false);
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [localError, setLocalError] = React.useState("");
+
+  const onSubmit = (e) => {
+    e.preventDefault();
+    setLocalError("");
+    if (password !== confirmPassword) {
+      setLocalError("Passwords do not match.");
+      return;
+    }
+    handleAuth(e);
+  };
 
   return (
     <div className="main-content">
@@ -17,11 +29,11 @@ export default function SignUp({ email, setEmail, password, setPassword, handleA
             </p>
           </div>
           
-          <form onSubmit={handleAuth}>
-            {authMessage && (
+          <form onSubmit={onSubmit}>
+            {(localError || authMessage) && (
               <div className="auth-error">
                 <AlertCircle size={18} />
-                {authMessage}
+                {localError || authMessage}
               </div>
             )}
 
@@ -58,6 +70,21 @@ export default function SignUp({ email, setEmail, password, setPassword, handleA
                 >
                   <span style={{ fontSize: "12px", fontWeight: "bold" }}>{showPassword ? "HIDE" : "SHOW"}</span>
                 </button>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Confirm Password</label>
+              <div className="input-icon-wrapper">
+                <Lock size={18} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  minLength={6}
+                  required
+                />
               </div>
             </div>
 

@@ -18,7 +18,6 @@ import History from "./pages/History";
 import SignIn from "./auth/SignIn";
 import SignUp from "./auth/SignUp";
 import ForgotPassword from "./auth/ForgotPassword";
-import ResetPassword from "./auth/ResetPassword";
 import VerifyEmail from "./auth/VerifyEmail";
 
 const transitionDate = "2024-07-01";
@@ -93,10 +92,17 @@ export default function App() {
       return;
     }
 
-    // Check URL hash for Supabase password recovery on load
+    // Check URL hash for Supabase password recovery or email verification on load
     const hash = window.location.hash;
     if (hash && hash.includes("type=recovery")) {
-      setActiveView("resetPassword");
+      setActiveView("forgotPassword");
+      // Note: Since we combined the flow into ForgotPassword, we'll route there and let it handle the state.
+    } else if (hash && hash.includes("type=signup")) {
+      supabase.auth.signOut().then(() => {
+        setAuthMessage("Email verified successfully! Please sign in.");
+        setActiveView("signin");
+        window.location.hash = "";
+      });
     }
 
     supabase.auth.getSession().then(({ data }) => {
@@ -297,8 +303,7 @@ export default function App() {
           />
         )}
         {activeView === "forgotPassword" && <ForgotPassword navigateTo={setActiveView} />}
-        {activeView === "resetPassword" && <ResetPassword navigateTo={setActiveView} />}
-        {activeView === "verifyEmail" && <VerifyEmail navigateTo={setActiveView} />}
+        {activeView === "verifyEmail" && <VerifyEmail navigateTo={setActiveView} email={email} />}
 
         {activeView === "chat" && (
           <Chat 
