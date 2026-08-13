@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { AlertCircle, Scale, Mail, Send, KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { supabase } from "../services/supabase";
 
 export default function ForgotPassword({ navigateTo }) {
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -13,19 +13,28 @@ export default function ForgotPassword({ navigateTo }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
-  // If App.jsx routed here via #access_token (fallback for users who click the link instead of using OTP)
+  const otpRefs = useRef([]);
+
+  // If App.jsx routed here via #access_token
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.includes("type=recovery")) {
-      // If they clicked a magic link, Supabase already verified them.
-      // Move directly to step 3.
       setStep(3);
     }
   }, []);
 
+  useEffect(() => {
+    let timer;
+    if (cooldown > 0) {
+      timer = setInterval(() => setCooldown((c) => c - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
   async function handleSendEmail(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setLoading(true);
     setError("");
     setMessage("");
@@ -35,31 +44,60 @@ export default function ForgotPassword({ navigateTo }) {
     if (error) {
       setError(error.message);
     } else {
-      setMessage("A 6-digit verification code has been sent to your email.");
+      setMessage("Verification code sent. Please check your email.");
+      setCooldown(60); // 60 second cooldown for resend
       setStep(2);
     }
     setLoading(false);
   }
 
+  const handleOtpChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return; // Only numeric allowed
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpRefs.current[index + 1].focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpRefs.current[index - 1].focus();
+    }
+  };
+
   async function handleVerifyOtp(e) {
     e.preventDefault();
+    const otpString = otp.join("");
+    if (otpString.length < 6) {
+      return setError("Please enter the 6-digit verification code.");
+    }
+    
     setLoading(true);
     setError("");
     setMessage("");
 
     const { error, data } = await supabase.auth.verifyOtp({
       email,
-      token: otp,
+      token: otpString,
       type: "recovery",
     });
 
     if (error) {
-      setError(error.message);
+      // Map Supabase errors to exact requested strings
+      if (error.message.toLowerCase().includes("expired")) {
+        setError("Verification code has expired. Please request a new code.");
+      } else {
+        setError("Invalid verification code.");
+      }
     } else if (data?.session) {
       setMessage("Code verified successfully! You may now set a new password.");
       setStep(3);
     } else {
-      setError("Verification failed. Please try again.");
+      setError("Invalid verification code.");
     }
     setLoading(false);
   }
@@ -81,9 +119,11 @@ export default function ForgotPassword({ navigateTo }) {
     if (error) {
       setError(error.message);
     } else {
-      setMessage("Your password has been reset successfully.");
+      setMessage("Password reset successfully.");
       setStep(4);
-      // Clean up the recovery session
+      setOtp(["", "", "", "", "", ""]);
+      setNewPassword("");
+      setConfirmPassword("");
       await supabase.auth.signOut();
     }
     setLoading(false);
@@ -97,14 +137,19 @@ export default function ForgotPassword({ navigateTo }) {
           <div className="auth-header">
             <Scale size={48} color="var(--accent-gold)" />
             <h2>
-              {step === 1 && "Reset Password"}
-              {step === 2 && "Verification Code"}
-              {step === 3 && "Set New Password"}
+              {step === 1 && "Forgot Password"}
+              {step === 2 && "Verify Your Email"}
+              {step === 3 && "Reset Password"}
               {step === 4 && "Password Reset"}
             </h2>
             <p style={{ color: "var(--text-secondary)", marginTop: "8px" }}>
               {step === 1 && "Enter your email to receive a recovery code"}
-              {step === 2 && "Enter the 6-digit code sent to your email"}
+              {step === 2 && (
+                <>
+                  We sent a 6-digit verification code to:<br/>
+                  <strong>{email}</strong>
+                </>
+              )}
               {step === 3 && "Please enter your new password below"}
               {step === 4 && "Your password has been updated successfully"}
             </p>
@@ -136,11 +181,10 @@ export default function ForgotPassword({ navigateTo }) {
               </div>
             )}
 
-            {/* STEP 1: ENTER EMAIL */}
             {step === 1 && (
               <form onSubmit={handleSendEmail}>
                 <div className="form-group">
-                  <label>Email Address</label>
+                  <label>Email</label>
                   <div className="input-icon-wrapper">
                     <Mail size={18} />
                     <input
@@ -165,29 +209,41 @@ export default function ForgotPassword({ navigateTo }) {
               </form>
             )}
 
-            {/* STEP 2: ENTER OTP */}
             {step === 2 && (
               <form onSubmit={handleVerifyOtp}>
                 <div className="form-group">
-                  <label>6-Digit Code</label>
-                  <div className="input-icon-wrapper">
-                    <KeyRound size={18} />
-                    <input
-                      type="text"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value)}
-                      placeholder="• • • • • •"
-                      maxLength={6}
-                      required
-                      style={{ letterSpacing: "8px", textAlign: "center", fontWeight: "bold" }}
-                    />
+                  <label style={{ textAlign: "center", display: "block" }}>Verification Code</label>
+                  <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "12px" }}>
+                    {otp.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={(el) => (otpRefs.current[index] = el)}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(index, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                        style={{
+                          width: "45px",
+                          height: "55px",
+                          textAlign: "center",
+                          fontSize: "24px",
+                          fontWeight: "bold",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--bg-secondary)",
+                          color: "var(--text-primary)"
+                        }}
+                      />
+                    ))}
                   </div>
                 </div>
 
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  style={{ width: "100%", marginBottom: "24px", height: "52px", fontSize: "16px" }}
+                  style={{ width: "100%", marginBottom: "24px", height: "52px", fontSize: "16px", marginTop: "16px" }}
                   disabled={loading}
                 >
                   <ShieldCheck size={20} />
@@ -197,16 +253,15 @@ export default function ForgotPassword({ navigateTo }) {
                   <button
                     type="button"
                     onClick={handleSendEmail}
-                    disabled={loading}
-                    style={{ background: "none", border: "none", color: "var(--accent-gold)", fontSize: "14px", cursor: "pointer" }}
+                    disabled={loading || cooldown > 0}
+                    style={{ background: "none", border: "none", color: cooldown > 0 ? "var(--text-muted)" : "var(--accent-gold)", fontSize: "14px", cursor: cooldown > 0 ? "not-allowed" : "pointer", fontWeight: "500" }}
                   >
-                    Resend Code
+                    {cooldown > 0 ? `Resend Code in ${cooldown}s` : "Resend Code"}
                   </button>
                 </div>
               </form>
             )}
 
-            {/* STEP 3: RESET PASSWORD */}
             {step === 3 && (
               <form onSubmit={handleUpdatePassword}>
                 <div className="form-group">
@@ -260,14 +315,13 @@ export default function ForgotPassword({ navigateTo }) {
               </form>
             )}
 
-            {/* STEP 4: SUCCESS */}
             {step === 4 && (
-              <div style={{ textAlign: "center" }}>
+              <div style={{ textAlign: "center", marginBottom: "24px" }}>
                 <button
                   type="button"
                   onClick={() => navigateTo("signin")}
                   className="btn btn-primary"
-                  style={{ width: "100%", marginBottom: "24px", height: "52px", fontSize: "16px" }}
+                  style={{ width: "100%", height: "52px", fontSize: "16px" }}
                 >
                   Go to Sign In
                 </button>
