@@ -73,11 +73,15 @@ LEGAL_ANSWER_SYSTEM_PROMPT = dedent(
 ).strip()
 
 
-async def analyze_query_intent(question: str) -> dict:
+async def analyze_query_intent(question: str, conversation: Optional[list[dict]] = None) -> dict:
     api_key = os.getenv("GROQ_API_KEY")
     model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is missing in backend/.env")
+        
+    history_context = format_conversation_context(conversation or [])
+    
+    prompt = f"Previous Context:\n{history_context if history_context else 'None'}\n\nCurrent Question:\n{question}"
         
     async with httpx.AsyncClient(timeout=10) as client:
         response = await client.post(
@@ -92,7 +96,7 @@ async def analyze_query_intent(question: str) -> dict:
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {"role": "system", "content": INTENT_SYSTEM_PROMPT},
-                    {"role": "user", "content": question},
+                    {"role": "user", "content": prompt},
                 ],
             },
         )

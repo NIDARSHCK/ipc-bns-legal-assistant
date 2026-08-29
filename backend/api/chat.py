@@ -70,7 +70,7 @@ async def ask_legal_question(
 
     namespace = "bns" if legal_era == "BNS" else "ipc"
 
-    intent_data = await analyze_query_intent(payload.question)
+    intent_data = await analyze_query_intent(payload.question, payload.conversation)
     intent = intent_data.get("intent", "legal_question")
     optimized_query = intent_data.get("optimized_query") or payload.question
 
