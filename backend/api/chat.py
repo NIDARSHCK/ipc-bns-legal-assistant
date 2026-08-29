@@ -152,7 +152,15 @@ async def ask_legal_question(
             citations=retrieved if 'retrieved' in locals() else [],
         )
         if conversation_id:
-            save_message(user["id"], conversation_id, "assistant", answer)
+            full_response = {
+                "answer": answer,
+                "citations": retrieved if 'retrieved' in locals() else [],
+                "comparison": comparison if 'comparison' in locals() else None,
+                "legal_era": legal_era,
+                "namespace": namespace,
+                "disclaimer": "This information is for general legal information and is not a substitute for professional legal advice."
+            }
+            save_message(user["id"], conversation_id, "assistant", full_response)
 
     return AskResponse(
         answer=answer, intent=intent, legal_era=legal_era, namespace=namespace,

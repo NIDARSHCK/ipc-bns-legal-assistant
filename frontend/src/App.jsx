@@ -267,7 +267,17 @@ export default function App() {
     setMessages([]);
     try {
       const msgs = await fetchConversationMessages(session?.access_token, item.id);
-      setMessages(msgs.map(m => ({ role: m.role, content: m.content, raw: m.content })));
+      setMessages(msgs.map(m => {
+        if (m.role === "assistant" && typeof m.content === "object" && m.content !== null) {
+          // If the backend saved the full wrapper object (new logic)
+          if (m.content.answer) {
+            return { role: m.role, content: m.content.answer, raw: m.content };
+          }
+          // If the backend saved just the answer dict (old logic)
+          return { role: m.role, content: m.content, raw: { answer: m.content } };
+        }
+        return { role: m.role, content: m.content, raw: m.content };
+      }));
     } catch (err) {
       setToast("Failed to load conversation");
     } finally {
