@@ -4,7 +4,7 @@ from fastapi import APIRouter, Header
 from pydantic import BaseModel
 
 from core.security import authenticated_user
-from database.supabase_db import save_query
+from database.supabase_db import save_query, create_conversation, save_message
 from core.llm_handler import analyze_query_intent, build_legal_answer
 from core.vector_db import search_legal_corpus
 from core.section_mapping import find_mapping_for_query
@@ -16,6 +16,7 @@ class AskRequest(BaseModel):
     incident_date: date
     forced_era: Optional[str] = None
     conversation: Optional[list[dict]] = []
+    conversation_id: Optional[str] = None
 
 class AskResponse(BaseModel):
     answer: Any
@@ -25,6 +26,7 @@ class AskResponse(BaseModel):
     citations: list[dict]
     comparison: Optional[dict] = None
     history_id: Optional[str] = None
+    conversation_id: Optional[str] = None
     query: str
     expanded_query: Optional[str] = None
     disclaimer: str
@@ -52,6 +54,14 @@ async def ask_legal_question(
     authorization: Optional[str] = Header(default=None),
 ):
     user = authenticated_user(authorization)
+    
+    conversation_id = payload.conversation_id
+    if user and not conversation_id:
+        title = payload.question[:40] + ("..." if len(payload.question) > 40 else "")
+        conversation_id = create_conversation(user["id"], title)
+        
+    if user and conversation_id:
+        save_message(user["id"], conversation_id, "user", payload.question)
 
     if payload.forced_era:
         legal_era = payload.forced_era
@@ -71,9 +81,12 @@ async def ask_legal_question(
             "what_it_means": "I am an AI assistant designed to help with Indian legal research.",
             "how_it_relates": "N/A"
         }
+        if user and conversation_id:
+            save_message(user["id"], conversation_id, "assistant", answer)
+            
         return AskResponse(
             answer=answer, intent=intent, legal_era=legal_era, namespace=namespace,
-            citations=[], comparison=None, history_id=None, query=payload.question,
+            citations=[], comparison=None, history_id=None, conversation_id=conversation_id, query=payload.question,
             expanded_query=optimized_query,
             disclaimer="This information is for general legal information and is not a substitute for professional legal advice."
         )
@@ -82,9 +95,11 @@ async def ask_legal_question(
         retrieved = search_legal_corpus(optimized_query, top_k=5, force_act=legal_era)
     except Exception as e:
         print(f"Pinecone retrieval error: {e}")
+        ans = {"direct_answer": "The legal vector database is currently experiencing a temporary connection issue. Please wait a few seconds and try again."}
+        if user and conversation_id: save_message(user["id"], conversation_id, "assistant", ans)
         return AskResponse(
-            answer={"direct_answer": "The legal vector database is currently experiencing a temporary connection issue. Please wait a few seconds and try again."},
-            intent=intent, legal_era=legal_era, namespace=namespace, citations=[], comparison=None, history_id=None,
+            answer=ans,
+            intent=intent, legal_era=legal_era, namespace=namespace, citations=[], comparison=None, history_id=None, conversation_id=conversation_id,
             query=payload.question, expanded_query=optimized_query, disclaimer="System temporarily unavailable."
         )
 
@@ -118,10 +133,12 @@ async def ask_legal_question(
 
     except Exception as exc:
         print(f"RAG pipeline error: {exc}")
+        ans = {"direct_answer": "The AI generation service is experiencing an issue. Please wait and try again."}
+        if user and conversation_id: save_message(user["id"], conversation_id, "assistant", ans)
         return AskResponse(
-            answer={"direct_answer": "The AI generation service is experiencing an issue. Please wait and try again."},
+            answer=ans,
             intent=intent, legal_era=legal_era, namespace=namespace, citations=retrieved if 'retrieved' in locals() else [],
-            comparison=None, history_id=None, query=payload.question, expanded_query=optimized_query, disclaimer="System temporarily unavailable."
+            comparison=None, history_id=None, conversation_id=conversation_id, query=payload.question, expanded_query=optimized_query, disclaimer="System temporarily unavailable."
         )
 
     history_id = None
@@ -134,12 +151,14 @@ async def ask_legal_question(
             legal_era=legal_era,
             citations=retrieved if 'retrieved' in locals() else [],
         )
+        if conversation_id:
+            save_message(user["id"], conversation_id, "assistant", answer)
 
     return AskResponse(
         answer=answer, intent=intent, legal_era=legal_era, namespace=namespace,
         citations=retrieved if 'retrieved' in locals() else [],
         comparison=comparison if 'comparison' in locals() else None,
-        history_id=history_id, query=payload.question, expanded_query=optimized_query,
+        history_id=history_id, conversation_id=conversation_id, query=payload.question, expanded_query=optimized_query,
         disclaimer="This information is for general legal information and is not a substitute for professional legal advice."
     )
 

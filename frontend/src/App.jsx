@@ -5,6 +5,7 @@ import {
   askLegalAssistant,
   fetchCurrentUser,
   fetchHistory,
+  fetchConversationMessages
 } from "./services/api";
 import { supabase } from "./services/supabase";
 
@@ -64,6 +65,7 @@ export default function App() {
   const [authMessage, setAuthMessage] = useState("");
   
   // Chat state
+  const [activeConversationId, setActiveConversationId] = useState(null);
   const [question, setQuestion] = useState("");
   const [incidentDateText, setIncidentDateText] = useState("2024-07-02");
   const [forcedEra, setForcedEra] = useState(null);
@@ -114,6 +116,8 @@ export default function App() {
       if (!nextSession) {
         setProfile(null);
         setHistory([]);
+        setActiveConversationId(null);
+        setMessages([]);
       }
     });
 
@@ -146,6 +150,7 @@ export default function App() {
   }
 
   function handleNewChat() {
+    setActiveConversationId(null);
     setMessages([]);
     setQuestion("");
     setActiveView("chat");
@@ -186,6 +191,8 @@ export default function App() {
     setSession(null);
     setProfile(null);
     setHistory([]);
+    setActiveConversationId(null);
+    setMessages([]);
     setActiveView("signin");
   }
 
@@ -215,8 +222,13 @@ export default function App() {
         incidentDate,
         forcedEra: era,
         accessToken: session?.access_token,
-        conversation: conversationContext
+        conversation: conversationContext,
+        conversationId: activeConversationId
       });
+      
+      if (answer.conversation_id) {
+        setActiveConversationId(answer.conversation_id);
+      }
       
       const newAssistantMsg = { role: "assistant", content: answer.answer, raw: answer };
       setMessages(prev => [...prev, newAssistantMsg]);
@@ -245,24 +257,22 @@ export default function App() {
     submitQuestion();
   }
 
-  function openHistoryItem(item) {
-    const rawAnswer = item.answer;
-    
-    // Convert history format to conversation format
-    setMessages([
-      { role: "user", content: item.question },
-      { role: "assistant", content: rawAnswer, raw: {
-          answer: rawAnswer,
-          legal_era: item.legal_era,
-          namespace: item.legal_era?.toLowerCase(),
-          citations: item.citations || [],
-          history_id: item.id,
-          comparison: item.comparison
-      }}
-    ]);
-    
-    setIncidentDateText(item.incident_date || "2024-07-02");
+  async function openHistoryItem(item) {
+    setActiveConversationId(item.id);
     setActiveView("chat");
+    if (window.innerWidth < 768) {
+      setMobileOpen(false);
+    }
+    setLoading(true);
+    setMessages([]);
+    try {
+      const msgs = await fetchConversationMessages(session?.access_token, item.id);
+      setMessages(msgs.map(m => ({ role: m.role, content: m.content, raw: m.content })));
+    } catch (err) {
+      setToast("Failed to load conversation");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -278,6 +288,9 @@ export default function App() {
         theme={theme}
         toggleTheme={toggleTheme}
         handleNewChat={handleNewChat}
+        history={history}
+        openHistoryItem={openHistoryItem}
+        activeConversationId={activeConversationId}
       />
 
       <div className="main-content">

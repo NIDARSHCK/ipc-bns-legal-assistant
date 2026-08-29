@@ -142,3 +142,51 @@ def get_all_history() -> list[dict]:
             except Exception:
                 pass
     return history
+
+def create_conversation(user_id: str, title: str) -> Optional[str]:
+    client = supabase()
+    if not client: return str(uuid4())
+    res = client.table("conversations").insert({"user_id": user_id, "title": title}).execute()
+    if res.data:
+        return res.data[0]["id"]
+    return None
+
+def save_message(user_id: str, conversation_id: str, role: str, content: Any) -> Optional[str]:
+    client = supabase()
+    if not client: return str(uuid4())
+    # Handle dict/string conversion for JSONB
+    if isinstance(content, str) and content.strip().startswith("{"):
+        try: content = json.loads(content)
+        except Exception: pass
+    
+    res = client.table("messages").insert({
+        "user_id": user_id, 
+        "conversation_id": conversation_id, 
+        "role": role, 
+        "content": content
+    }).execute()
+    
+    # Update conversation's updated_at timestamp
+    client.table("conversations").update({
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }).eq("id", conversation_id).execute()
+    
+    if res.data: return res.data[0]["id"]
+    return None
+
+def get_conversations(user_id: str) -> list[dict]:
+    client = supabase()
+    if not client: return []
+    res = client.table("conversations").select("*").eq("user_id", user_id).order("updated_at", desc=True).limit(50).execute()
+    return res.data or []
+
+def get_conversation_messages(user_id: str, conversation_id: str) -> list[dict]:
+    client = supabase()
+    if not client: return []
+    res = client.table("messages").select("*").eq("user_id", user_id).eq("conversation_id", conversation_id).order("created_at", asc=True).execute()
+    messages = res.data or []
+    for m in messages:
+        if isinstance(m.get("content"), str) and m["content"].strip().startswith("{"):
+            try: m["content"] = json.loads(m["content"])
+            except Exception: pass
+    return messages

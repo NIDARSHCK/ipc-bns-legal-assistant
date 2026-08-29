@@ -5,8 +5,7 @@ export default function History({ items, onOpen }) {
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredItems = items.filter(item => 
-    item.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (item.answer && item.answer.toLowerCase().includes(searchQuery.toLowerCase()))
+    item.title?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Grouping logic
@@ -27,7 +26,7 @@ export default function History({ items, onOpen }) {
   last7Days.setDate(last7Days.getDate() - 7);
 
   filteredItems.forEach(item => {
-    const itemDate = new Date(item.created_at);
+    const itemDate = new Date(item.updated_at || item.created_at);
     if (itemDate >= today) {
       groups["Today"].push(item);
     } else if (itemDate >= yesterday) {
@@ -92,13 +91,11 @@ export default function History({ items, onOpen }) {
                 {groupItems.map((item) => (
                   <div key={item.id} className="history-card" onClick={() => onOpen(item)}>
                     <div className="history-card-left">
-                      <div className="history-card-title">{item.question}</div>
+                      <div className="history-card-title">{item.title}</div>
                       <div className="history-card-meta">
                         <span>{new Date(item.created_at).toLocaleDateString()}</span>
                         <span>•</span>
                         <span>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        <span>•</span>
-                        <span style={{ color: "var(--accent-gold)", fontWeight: 500 }}>{item.legal_era}</span>
                       </div>
                     </div>
                     

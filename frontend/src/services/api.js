@@ -33,6 +33,8 @@ export async function askLegalAssistant({
   incidentDate,
   forcedEra,
   accessToken,
+  conversation,
+  conversationId,
 })  {
   return fetchWithJson(`${API_BASE_URL}/chat`, {
     method: "POST",
@@ -44,6 +46,8 @@ export async function askLegalAssistant({
       question,
       incident_date: incidentDate,
       forced_era: forcedEra, 
+      conversation,
+      conversation_id: conversationId,
     }),
   });
 }
@@ -68,6 +72,13 @@ export async function fetchHistory(accessToken) {
 
 export async function fetchAdminHistory(accessToken) {
   const data = await fetchWithJson(`${API_BASE_URL}/admin/history`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return data.items || [];
+}
+
+export async function fetchConversationMessages(accessToken, conversationId) {
+  const data = await fetchWithJson(`${API_BASE_URL}/history/${conversationId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   return data.items || [];
