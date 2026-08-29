@@ -93,7 +93,7 @@ export default function ForgotPassword({ navigateTo }) {
       } else {
         setError("Invalid verification code.");
       }
-    } else if (data?.session) {
+    } else if (!error) {
       setMessage("Code verified successfully! You may now set a new password.");
       setStep(3);
     } else {

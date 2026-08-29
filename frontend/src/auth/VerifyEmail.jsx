@@ -17,7 +17,7 @@ export default function VerifyEmail({ email }) {
       type: 'signup',
       email: email,
       options: {
-        emailRedirectTo: `${window.location.origin}/` // We just use origin since it's a SPA without react-router
+        emailRedirectTo: `${window.location.origin}/auth/callback`
       }
     });
     if (error) {

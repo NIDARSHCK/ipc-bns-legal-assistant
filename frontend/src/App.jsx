@@ -165,7 +165,7 @@ export default function App() {
         : supabase.auth.signUp({ 
             email, 
             password, 
-            options: { emailRedirectTo: `${window.location.origin}/` } 
+            options: { emailRedirectTo: `${window.location.origin}/auth/callback` } 
           });
     const { error: authError } = await action;
     if (authError) {
