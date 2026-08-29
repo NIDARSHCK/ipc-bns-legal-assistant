@@ -98,11 +98,8 @@ export default function App() {
       setActiveView("forgotPassword");
       // Note: Since we combined the flow into ForgotPassword, we'll route there and let it handle the state.
     } else if (hash && hash.includes("type=signup")) {
-      supabase.auth.signOut().then(() => {
-        setAuthMessage("Email verified successfully! Please sign in.");
-        setActiveView("signin");
-        window.location.hash = "";
-      });
+      window.location.hash = "";
+      setActiveView("chat");
     }
 
     supabase.auth.getSession().then(({ data }) => {
@@ -127,6 +124,12 @@ export default function App() {
     if (!session?.access_token) return;
     refreshSessionData(session.access_token);
   }, [session?.access_token]);
+
+  useEffect(() => {
+    if (activeView === "chat" && !isSignedIn) {
+      setActiveView("signin");
+    }
+  }, [activeView, isSignedIn]);
 
   async function refreshSessionData(accessToken) {
     try {
@@ -159,7 +162,11 @@ export default function App() {
     const action =
       activeView === "signin"
         ? supabase.auth.signInWithPassword({ email, password })
-        : supabase.auth.signUp({ email, password });
+        : supabase.auth.signUp({ 
+            email, 
+            password, 
+            options: { emailRedirectTo: `${window.location.origin}/` } 
+          });
     const { error: authError } = await action;
     if (authError) {
       setAuthMessage(authError.message);

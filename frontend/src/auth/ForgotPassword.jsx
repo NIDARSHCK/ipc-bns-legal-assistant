@@ -5,7 +5,7 @@ import { supabase } from "../services/supabase";
 export default function ForgotPassword({ navigateTo }) {
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otp, setOtp] = useState(["", "", "", "", "", "", "", ""]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -58,7 +58,7 @@ export default function ForgotPassword({ navigateTo }) {
     setOtp(newOtp);
 
     // Auto-focus next input
-    if (value && index < 5) {
+    if (value && index < 7) {
       otpRefs.current[index + 1].focus();
     }
   };
@@ -72,8 +72,8 @@ export default function ForgotPassword({ navigateTo }) {
   async function handleVerifyOtp(e) {
     e.preventDefault();
     const otpString = otp.join("");
-    if (otpString.length < 6) {
-      return setError("Please enter the 6-digit verification code.");
+    if (otpString.length < 8) {
+      return setError("Please enter the 8-digit verification code.");
     }
     
     setLoading(true);
@@ -146,7 +146,7 @@ export default function ForgotPassword({ navigateTo }) {
               {step === 1 && "Enter your email to receive a recovery code"}
               {step === 2 && (
                 <>
-                  We sent a 6-digit verification code to:<br/>
+                  We sent an 8-digit verification code to:<br/>
                   <strong>{email}</strong>
                 </>
               )}
@@ -213,7 +213,7 @@ export default function ForgotPassword({ navigateTo }) {
               <form onSubmit={handleVerifyOtp}>
                 <div className="form-group">
                   <label style={{ textAlign: "center", display: "block" }}>Verification Code</label>
-                  <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "center", gap: "6px", marginTop: "12px" }}>
                     {otp.map((digit, index) => (
                       <input
                         key={index}
@@ -225,10 +225,10 @@ export default function ForgotPassword({ navigateTo }) {
                         onChange={(e) => handleOtpChange(index, e.target.value)}
                         onKeyDown={(e) => handleOtpKeyDown(index, e)}
                         style={{
-                          width: "45px",
-                          height: "55px",
+                          width: "38px",
+                          height: "50px",
                           textAlign: "center",
-                          fontSize: "24px",
+                          fontSize: "22px",
                           fontWeight: "bold",
                           borderRadius: "8px",
                           border: "1px solid var(--border-color)",
