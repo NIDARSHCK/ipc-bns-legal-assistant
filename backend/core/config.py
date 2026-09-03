@@ -7,4 +7,4 @@ ALLOWED_ORIGINS = (
 )
 
 def get_allowed_origins() -> list[str]:
-    return ["*"]
+    return [origin.strip() for origin in ALLOWED_ORIGINS.split(",") if origin.strip()]

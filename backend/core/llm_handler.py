@@ -20,9 +20,13 @@ INTENT_SYSTEM_PROMPT = dedent(
     
     If it is a legal_question, legal_situation, or comparison, generate an "optimized_query" containing 4-8 highly relevant keywords.
     
-    If intent is "comparison", you MUST identify the source Act and section being asked about, and the target Act.
+    For ANY query mentioning a specific Act (IPC or BNS) and/or section, extract them into source_act and source_section.
+    (e.g., "IPC Section 420" -> source_act: "IPC", source_section: "420")
+    (e.g., "BNS 103" -> source_act: "BNS", source_section: "103")
+    (e.g., "section 420" -> source_act: null, source_section: "420")
+    
+    If intent is "comparison", you MUST identify the target Act as well.
     (e.g., "BNS equivalent of IPC 302" -> source_act: "IPC", source_section: "302", target_act: "BNS")
-    (e.g., "Which IPC provision corresponds to BNS 103?" -> source_act: "BNS", source_section: "103", target_act: "IPC")
     (e.g., "How has theft changed from IPC to BNS?" -> source_act: null, source_section: null, target_act: null, optimized_query: "theft IPC BNS transition")
     
     Return ONLY a JSON object with this exact schema:

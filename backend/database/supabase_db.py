@@ -183,7 +183,7 @@ def get_conversations(user_id: str) -> list[dict]:
 def get_conversation_messages(user_id: str, conversation_id: str) -> list[dict]:
     client = supabase()
     if not client: return []
-    res = client.table("messages").select("*").eq("user_id", user_id).eq("conversation_id", conversation_id).order("created_at", asc=True).execute()
+    res = client.table("messages").select("*").eq("user_id", user_id).eq("conversation_id", conversation_id).order("created_at", desc=False).execute()
     messages = res.data or []
     for m in messages:
         if isinstance(m.get("content"), str) and m["content"].strip().startswith("{"):

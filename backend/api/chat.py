@@ -129,7 +129,20 @@ async def ask_legal_question(
                 retrieved = [source_chunk] + target_candidates
         else:
             # STANDARD RETRIEVAL
-            retrieved = search_legal_corpus(optimized_query, top_k=5, force_act=legal_era)
+            source_act = intent_data.get("source_act")
+            
+            if not source_act:
+                from core.vector_db import detect_exact_sections
+                exacts = detect_exact_sections(optimized_query)
+                for e in exacts:
+                    if e.get("act"):
+                        source_act = e.get("act")
+                        break
+                        
+            if not source_act and payload.forced_era:
+                source_act = payload.forced_era
+                
+            retrieved = search_legal_corpus(optimized_query, top_k=5, force_act=source_act)
             if not retrieved:
                 answer = {"direct_answer": "I couldn't find a sufficiently relevant source in the available legal documents."}
                 comparison = None
