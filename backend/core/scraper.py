@@ -32,45 +32,39 @@ def detect_section(text: str) -> str:
     return "unknown"
 
 
-def split_into_chunks(text: str, act: str, source_name: str, year: int = None, status: str = "unknown", source: str = "unknown", max_chars: int = 1400) -> list[dict]:
-    # A robust section regex to capture "Section 281. Title.—Content"
-    # Legal texts might have various forms. We'll split on "Section " or "Sec. " followed by number.
-    # The new chunking strategy uses a regex split to keep entire sections together.
-    
-    # Split text into rough chunks using "Section [num]"
-    parts = re.split(r"(?i)\n(?=section\s+\d+|sec\.?\s+\d+)", text)
+def split_into_chunks(text: str, act: str, source_name: str, year: int = None, status: str = "unknown", source: str = "unknown", max_chars: int = 2000) -> list[dict]:
+    # Split text into rough chunks using either "Section 123." or "123. Title"
+    parts = re.split(r"\n(?=(?:Section\s+|Sec\.?\s*)?\d+[A-Z]?\.\s+[A-Z])", text, flags=re.IGNORECASE)
     
     pieces = []
-    counter = 1
     
-    for part in parts:
+    # We will track the last seen page number
+    current_page = "unknown"
+    
+    for part_index, part in enumerate(parts):
+        # Update current page from the chunk if available
+        page_hints = re.findall(r"\[PAGE\s+(\d+)\]", part)
+        if page_hints:
+            current_page = page_hints[-1] # The last page tag seen in this part
+            
         part = part.strip()
         if not part:
             continue
             
-        # Try to detect section number and title in this part
-        # Example: "Section 281. Rash driving.—(1) Whoever..."
         section_num = "unknown"
         title = "Legal text"
         
-        match = re.search(r"^(?:section|sec\.?)\s+([0-9A-Za-z-]+)\.?\s+([^—\n]+)", part, flags=re.I)
+        # Match e.g. "Section 281. Rash driving.—" or "281. Rash driving ."
+        match = re.search(r"^(?:Section\s+|Sec\.?\s*)?([0-9]+[A-Za-z-]*)\.\s+([^—\n.]+)", part, flags=re.IGNORECASE)
         if match:
-            section_num = match.group(1)
+            section_num = match.group(1).upper()
             title = match.group(2).strip()
-        else:
-            # Fallback if just numbered e.g. "281. Rash driving"
-            match2 = re.search(r"^([0-9]+[A-Z]?)\.\s+([A-Z][^—\n]+)", part)
-            if match2:
-                section_num = match2.group(1)
-                title = match2.group(2).strip()
         
-        # We may still need to sub-chunk if a single section is extremely long (over 2000 chars)
-        # to fit well in the embedding model context window.
         sub_parts = []
-        if len(part) > 2000:
+        if len(part) > max_chars:
             start = 0
             while start < len(part):
-                end = min(start + 1800, len(part))
+                end = min(start + max_chars - 200, len(part))
                 if end < len(part):
                     boundary = part.rfind(". ", start, end)
                     if boundary > start + 500:
@@ -80,21 +74,24 @@ def split_into_chunks(text: str, act: str, source_name: str, year: int = None, s
         else:
             sub_parts = [part]
             
-        for sub in sub_parts:
-            if not sub:
+        for chunk_index, sub in enumerate(sub_parts):
+            if len(sub) < 10:  # Skip tiny garbage chunks
                 continue
+            
             pieces.append({
-                "id": f"{act.lower()}-{source_name}-{section_num}-{counter}",
+                "id": f"{act.lower()}-{section_num}-{part_index}-{chunk_index}",
+                "chunk_id": f"{act.upper()}_{section_num}_{chunk_index}",
                 "text": sub,
                 "act": act.upper(),
                 "section": section_num,
+                "parent_section": section_num,
                 "title": title,
-                "page": _page_hint(sub),
+                "page": current_page,
                 "year": year,
                 "status": status,
-                "source": source
+                "source": source,
+                "chunk_index": chunk_index
             })
-            counter += 1
             
     return pieces
 

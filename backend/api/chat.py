@@ -5,9 +5,8 @@ from pydantic import BaseModel
 
 from core.security import authenticated_user
 from database.supabase_db import save_query, create_conversation, save_message
-from core.llm_handler import analyze_query_intent, build_legal_answer
-from core.vector_db import search_legal_corpus
-from core.section_mapping import find_mapping_for_query
+from core.llm_handler import analyze_query_intent, build_legal_answer, build_comparison_answer
+from core.vector_db import search_legal_corpus, semantic_text_search
 
 router = APIRouter()
 
@@ -68,7 +67,7 @@ async def ask_legal_question(
     else:
         legal_era = "BNS" if payload.incident_date >= date(2024, 7, 1) else "IPC"
 
-    namespace = "bns" if legal_era == "BNS" else "ipc"
+    namespace = "bns_v2" if legal_era == "BNS" else "ipc_v2"
 
     intent_data = await analyze_query_intent(payload.question, payload.conversation)
     intent = intent_data.get("intent", "legal_question")
@@ -92,46 +91,62 @@ async def ask_legal_question(
         )
 
     try:
-        retrieved = search_legal_corpus(optimized_query, top_k=5, force_act=legal_era)
-    except Exception as e:
-        print(f"Pinecone retrieval error: {e}")
-        ans = {"direct_answer": "The legal vector database is currently experiencing a temporary connection issue. Please wait a few seconds and try again."}
-        if user and conversation_id: save_message(user["id"], conversation_id, "assistant", ans)
-        return AskResponse(
-            answer=ans,
-            intent=intent, legal_era=legal_era, namespace=namespace, citations=[], comparison=None, history_id=None, conversation_id=conversation_id,
-            query=payload.question, expanded_query=optimized_query, disclaimer="System temporarily unavailable."
-        )
-
-    try:
-        if not retrieved:
-            answer = {"direct_answer": "I couldn't find a sufficiently relevant source in the available legal documents."}
-            comparison = None
-        else:
-            try:
-                llm_res = await build_legal_answer(
-                    payload.question, payload.incident_date.isoformat(), legal_era, retrieved, payload.conversation
-                )
+        if intent == "comparison":
+            # TWO-STAGE COMPARISON RETRIEVAL
+            source_act = intent_data.get("source_act")
+            source_section = intent_data.get("source_section")
+            target_act = intent_data.get("target_act")
+            
+            if not source_act:
+                source_act = "IPC" if legal_era == "BNS" else "BNS"
+            if not target_act:
+                target_act = "BNS" if source_act == "IPC" else "IPC"
+                
+            source_namespace = f"{source_act.lower()}_v2"
+            target_namespace = f"{target_act.lower()}_v2"
+            
+            # 1. Retrieve Source
+            source_query = f"{source_act} {source_section}" if source_section else optimized_query
+            retrieved_source = search_legal_corpus(source_query, top_k=1, force_act=source_act)
+            
+            if not retrieved_source:
+                answer = {"direct_answer": f"Could not retrieve the source {source_act} provision to compare."}
+                comparison = None
+                retrieved = []
+            else:
+                source_chunk = retrieved_source[0]
+                source_text_for_search = f"{source_chunk.get('title', '')} {source_chunk.get('text', '')}"
+                
+                # 2. Semantic Search on Target (Bypassing exact filters)
+                target_candidates = semantic_text_search(source_text_for_search, target_namespace, top_k=5)
+                
+                # 3. LLM Comparison
+                llm_res = await build_comparison_answer(payload.question, source_chunk, target_candidates, payload.conversation)
                 answer = llm_res.get("answer", "")
                 comparison = llm_res.get("comparison", None)
-            except Exception:
-                answer = build_fallback_answer(payload.question, payload.incident_date.isoformat(), legal_era, retrieved)
+                
+                # Citations combine both
+                retrieved = [source_chunk] + target_candidates
+        else:
+            # STANDARD RETRIEVAL
+            retrieved = search_legal_corpus(optimized_query, top_k=5, force_act=legal_era)
+            if not retrieved:
+                answer = {"direct_answer": "I couldn't find a sufficiently relevant source in the available legal documents."}
                 comparison = None
-            
-            mapping = find_mapping_for_query(payload.question, legal_era)
-            if mapping and not comparison:
-                ipc_sec = mapping["ipc_section"]
-                bns_sec = mapping["bns_section"]
-                title = mapping["bns_title"] if legal_era == "BNS" else mapping["ipc_title"]
-                
-                mapping_text = f"Section Mapping: {'IPC Section ' + ipc_sec + ' maps to BNS Section ' + bns_sec if legal_era == 'IPC' else 'BNS Section ' + bns_sec + ' maps to IPC Section ' + ipc_sec} ({title}). Note: {mapping['notes']}"
-                
-                if isinstance(answer, dict):
-                    answer["section_mapping"] = mapping_text
-                else:
-                    answer += f"\n\n{mapping_text}"
+            else:
+                try:
+                    llm_res = await build_legal_answer(
+                        payload.question, payload.incident_date.isoformat(), legal_era, retrieved, payload.conversation
+                    )
+                    answer = llm_res.get("answer", "")
+                    comparison = llm_res.get("comparison", None)
+                except Exception:
+                    answer = build_fallback_answer(payload.question, payload.incident_date.isoformat(), legal_era, retrieved)
+                    comparison = None
 
     except Exception as exc:
+        import traceback
+        traceback.print_exc()
         print(f"RAG pipeline error: {exc}")
         ans = {"direct_answer": "The AI generation service is experiencing an issue. Please wait and try again."}
         if user and conversation_id: save_message(user["id"], conversation_id, "assistant", ans)

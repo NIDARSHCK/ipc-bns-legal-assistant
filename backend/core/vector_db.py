@@ -90,7 +90,18 @@ def search_legal_corpus(
     force_act: str | None = None,
 ) -> list[dict]:
     idx = index()
-    namespaces_to_search = ["ipc_v2", "bns_v2"]
+    
+    if not force_act:
+        q_upper = query.upper()
+        if "IPC" in q_upper and "BNS" not in q_upper:
+            force_act = "IPC"
+        elif "BNS" in q_upper and "IPC" not in q_upper:
+            force_act = "BNS"
+            
+    if force_act:
+        namespaces_to_search = [f"{force_act.lower()}_v2"]
+    else:
+        namespaces_to_search = ["ipc_v2", "bns_v2"]
     
     all_hits = []
     vector = None
@@ -175,3 +186,89 @@ def search_legal_corpus(
         
     results.sort(key=lambda x: x["score"], reverse=True)
     return results[:top_k]
+
+def clear_namespace(namespace: str):
+    idx = index()
+    print(f"Clearing namespace {namespace}...")
+    try:
+        idx.delete(delete_all=True, namespace=namespace)
+        print(f"Namespace {namespace} cleared successfully.")
+    except Exception as e:
+        print(f"Failed to clear namespace {namespace}: {e}")
+
+def upsert_chunks(namespace: str, chunks: list[dict], batch_size: int = 100):
+    idx = index()
+    
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i : i + batch_size]
+        vectors = []
+        for chunk in batch:
+            vector_values = embed_text(chunk["text"], input_type="passage")
+            
+            metadata = {
+                "act": chunk.get("act", ""),
+                "section": str(chunk.get("section", "")),
+                "title": chunk.get("title", ""),
+                "page": str(chunk.get("page", "")),
+                "year": chunk.get("year", 0),
+                "status": chunk.get("status", ""),
+                "source": chunk.get("source", ""),
+                "chunk_index": chunk.get("chunk_index", 0),
+                "parent_section": str(chunk.get("parent_section", "")),
+                TEXT_FIELD: chunk["text"],
+            }
+            
+            metadata = {k: v for k, v in metadata.items() if v is not None}
+            
+            vectors.append({
+                "id": chunk["id"],
+                "values": vector_values,
+                "metadata": metadata,
+            })
+            
+        print(f"Upserting batch {i//batch_size + 1}/{(len(chunks) + batch_size - 1)//batch_size} ({len(batch)} vectors)...")
+        run_with_retry(idx.upsert, vectors=vectors, namespace=namespace)
+def semantic_text_search(text: str, namespace: str, top_k: int = 5) -> list[dict]:
+    idx = index()
+    vector = embed_text(text, input_type="query")
+    
+    if hasattr(idx, "search"):
+        response = run_with_retry(
+            idx.search,
+            namespace=namespace,
+            query={"inputs": {"text": text}, "top_k": top_k},
+            fields=["act", "section", "title", "page", TEXT_FIELD],
+        )
+        hits = response.get("result", {}).get("hits", [])
+    else:
+        response = run_with_retry(
+            idx.query,
+            namespace=namespace, vector=vector, top_k=top_k, include_metadata=True
+        )
+        hits = response.get("matches", [])
+        
+    results = []
+    seen_ids = set()
+    for hit in hits:
+        hit_id = hit.get("_id") or hit.get("id")
+        if hit_id in seen_ids:
+            continue
+        seen_ids.add(hit_id)
+        
+        score = hit.get("_score") or hit.get("score") or 0
+        if score < MIN_MATCH_SCORE:
+            continue
+            
+        fields = hit.get("fields") or hit.get("metadata") or {}
+        results.append(
+            {
+                "id": hit_id,
+                "score": score,
+                "act": fields.get("act"),
+                "section": fields.get("section"),
+                "title": fields.get("title"),
+                "page": fields.get("page"),
+                "text": fields.get(TEXT_FIELD),
+            }
+        )
+    return results

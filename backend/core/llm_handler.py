@@ -13,17 +13,25 @@ INTENT_SYSTEM_PROMPT = dedent(
     - greeting (for hi, hello, who are you)
     - legal_question (for general offenses, punishments, IPC/BNS sections)
     - legal_situation (for "someone hit my car", "my neighbor is threatening me", "accident")
-    - comparison (explicitly asking to compare IPC and BNS)
+    - comparison (explicitly asking to map, compare, or transition between IPC and BNS. e.g. "BNS equivalent of IPC 302", "What replaced IPC 378?", "How has theft changed from IPC to BNS?")
     - summarization (asking to summarize a law)
     - general_information (general questions about the assistant)
     - unsupported (non-legal questions like "how to cook")
     
-    If it is a legal_question, legal_situation, or comparison, generate an "optimized_query" containing 4-8 highly relevant keywords (e.g., "cheating deception dishonest inducement IPC BNS offence", "rash driving negligence road accident BNS") to maximize vector search retrieval.
+    If it is a legal_question, legal_situation, or comparison, generate an "optimized_query" containing 4-8 highly relevant keywords.
+    
+    If intent is "comparison", you MUST identify the source Act and section being asked about, and the target Act.
+    (e.g., "BNS equivalent of IPC 302" -> source_act: "IPC", source_section: "302", target_act: "BNS")
+    (e.g., "Which IPC provision corresponds to BNS 103?" -> source_act: "BNS", source_section: "103", target_act: "IPC")
+    (e.g., "How has theft changed from IPC to BNS?" -> source_act: null, source_section: null, target_act: null, optimized_query: "theft IPC BNS transition")
     
     Return ONLY a JSON object with this exact schema:
     {
         "intent": "string",
-        "optimized_query": "string (or null)"
+        "optimized_query": "string (or null)",
+        "source_act": "string (IPC or BNS, or null)",
+        "source_section": "string (e.g. '302', or null)",
+        "target_act": "string (IPC or BNS, or null)"
     }
     """
 ).strip()
@@ -202,3 +210,109 @@ async def build_legal_answer(
             return json.loads(data["choices"][0]["message"]["content"])
         except Exception:
             return {"answer": data["choices"][0]["message"]["content"], "comparison": None}
+
+
+COMPARISON_SYSTEM_PROMPT = dedent(
+    """
+    You are an expert Indian Legal Mapping AI evaluating the transition between the Indian Penal Code (IPC) and Bharatiya Nyaya Sanhita (BNS).
+    
+    You will be provided with:
+    1. A SOURCE Section (the old or new law queried).
+    2. Multiple TARGET Candidates retrieved semantically from the opposite Act.
+    
+    Your task is to critically evaluate the actual legal text of the Source against the Candidates and determine the true substantive equivalent.
+    Do NOT blindly select a candidate just because the section number is similar.
+    Do NOT blindly select the first candidate.
+    Read the legal provisions carefully.
+    
+    Allowed relationships:
+    - "Exact/Direct Correspondence"
+    - "Substantially Corresponding"
+    - "Modified Provision"
+    - "Related Provision"
+    - "No Reliable Correspondence Found"
+    
+    If none of the candidates meaningfully correspond, use "No Reliable Correspondence Found" and explain why.
+    
+    Return ONLY a JSON object with this exact schema:
+    {
+      "answer": {
+        "direct_answer": "Crisp 1-2 sentence executive summary of the mapping.",
+        "relevant_law": "State both the Source and Target provisions.",
+        "what_it_means": "Explain the relationship clearly in bullet points (-).",
+        "how_it_relates": "Direct connection to the user's facts (if any)."
+      },
+      "comparison": {
+        "source_act": "IPC or BNS",
+        "source_section": "section number",
+        "source_title": "title of source",
+        "target_act": "IPC or BNS",
+        "target_section": "section number (or null if none found)",
+        "target_title": "title of target (or null if none found)",
+        "relationship": "One of the allowed relationships",
+        "summary": "Crisp explanation of what changed or if it was retained exactly.",
+        "changes": "Key differences, additions, or omissions."
+      }
+    }
+    """
+).strip()
+
+async def build_comparison_answer(
+    question: str,
+    source_res: dict,
+    target_candidates: list[dict],
+    conversation: list[dict] = None
+) -> dict:
+    api_key = os.getenv("GROQ_API_KEY")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY is missing in backend/.env")
+
+    history_context = format_conversation_context(conversation or [])
+    
+    source_context = f"Source Act: {source_res.get('act')}\nSource Section: {source_res.get('section')}\nTitle: {source_res.get('title')}\nText: {source_res.get('text')}"
+    
+    candidates_context = ""
+    for i, c in enumerate(target_candidates, 1):
+        candidates_context += f"\n\n--- Candidate {i} ---\nAct: {c.get('act')}\nSection: {c.get('section')}\nTitle: {c.get('title')}\nScore: {c.get('score')}\nText: {c.get('text')}"
+    
+    user_prompt = dedent(
+        f"""
+        Previous Conversation Context:
+        {history_context if history_context else 'None'}
+        
+        Current Question:
+        {question}
+        
+        --- SOURCE PROVISION ---
+        {source_context}
+        
+        --- TARGET CANDIDATES ---
+        {candidates_context}
+        """
+    ).strip()
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            GROQ_API_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "temperature": 0.1,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": COMPARISON_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        try:
+            return json.loads(data["choices"][0]["message"]["content"])
+        except Exception:
+            return {"answer": {"direct_answer": data["choices"][0]["message"]["content"]}, "comparison": None}
+
