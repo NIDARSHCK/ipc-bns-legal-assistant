@@ -121,7 +121,7 @@ export default function ForgotPassword({ navigateTo }) {
     } else {
       setMessage("Password reset successfully.");
       setStep(4);
-      setOtp(["", "", "", "", "", ""]);
+      setOtp(["", "", "", "", "", "", "", ""]);
       setNewPassword("");
       setConfirmPassword("");
       await supabase.auth.signOut();

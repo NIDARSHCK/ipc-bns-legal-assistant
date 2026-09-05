@@ -110,6 +110,9 @@ def search_legal_corpus(
 
     exact_sections = detect_exact_sections(query)
     
+    # Safe debug logging
+    print(f"[DEBUG Retrieval] Query: '{query}' | Namespaces: {namespaces_to_search} | Exact detected: {exact_sections}")
+    
     for ns in namespaces_to_search:
         act_ns = ns.split('_')[0].upper()
         
@@ -167,25 +170,36 @@ def search_legal_corpus(
             continue
         seen_ids.add(hit_id)
         
-        score = hit.get("_score") or hit.get("score") or 0
+        score = float(hit.get("_score") or hit.get("score") or 0.0)
+        
+        # Deterministic score filtering: must meet minimum threshold or have an exact boost
         if score < MIN_MATCH_SCORE and score < 0.5:
             continue
             
         fields = hit.get("fields") or hit.get("metadata") or {}
         results.append(
             {
-                "id": hit_id,
+                "id": str(hit_id),
                 "score": score,
-                "act": fields.get("act"),
-                "section": fields.get("section"),
-                "title": fields.get("title"),
-                "page": fields.get("page"),
-                "text": fields.get(TEXT_FIELD),
+                "act": str(fields.get("act", "")),
+                "section": str(fields.get("section", "")),
+                "title": str(fields.get("title", "")),
+                "page": str(fields.get("page", "")),
+                "text": str(fields.get(TEXT_FIELD, "")),
             }
         )
         
     results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:top_k]
+    final_results = results[:top_k]
+    
+    # Log outcomes
+    if final_results:
+        top = final_results[0]
+        print(f"[DEBUG Retrieval] Hits: {len(final_results)} | Top Score: {top['score']:.4f} | Top Act: {top['act']} | Top Section: {top['section']}")
+    else:
+        print(f"[DEBUG Retrieval] Hits: 0")
+        
+    return final_results
 
 def clear_namespace(namespace: str):
     idx = index()

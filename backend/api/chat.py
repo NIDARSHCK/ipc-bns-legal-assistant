@@ -69,7 +69,27 @@ async def ask_legal_question(
 
     namespace = "bns_v2" if legal_era == "BNS" else "ipc_v2"
 
-    intent_data = await analyze_query_intent(payload.question, payload.conversation)
+    # 1. Deterministic Extraction FIRST
+    from core.vector_db import detect_exact_sections
+    exact_matches = detect_exact_sections(payload.question)
+    detected_act = None
+    detected_section = None
+    if exact_matches:
+        for e in exact_matches:
+            if e.get("act"):
+                detected_act = e.get("act")
+            if e.get("section"):
+                detected_section = e.get("section")
+            if detected_act and detected_section:
+                break
+    
+    # 2. LLM Intent Analysis
+    try:
+        intent_data = await analyze_query_intent(payload.question, payload.conversation)
+    except Exception as e:
+        print(f"Warning: Intent analysis failed: {e}")
+        intent_data = {}
+        
     intent = intent_data.get("intent", "legal_question")
     optimized_query = intent_data.get("optimized_query") or payload.question
 
@@ -93,8 +113,8 @@ async def ask_legal_question(
     try:
         if intent == "comparison":
             # TWO-STAGE COMPARISON RETRIEVAL
-            source_act = intent_data.get("source_act")
-            source_section = intent_data.get("source_section")
+            source_act = intent_data.get("source_act") or detected_act
+            source_section = intent_data.get("source_section") or detected_section
             target_act = intent_data.get("target_act")
             
             if not source_act:
@@ -121,28 +141,33 @@ async def ask_legal_question(
                 target_candidates = semantic_text_search(source_text_for_search, target_namespace, top_k=5)
                 
                 # 3. LLM Comparison
-                llm_res = await build_comparison_answer(payload.question, source_chunk, target_candidates, payload.conversation)
-                answer = llm_res.get("answer", "")
-                comparison = llm_res.get("comparison", None)
+                try:
+                    llm_res = await build_comparison_answer(payload.question, source_chunk, target_candidates, payload.conversation)
+                    answer = llm_res.get("answer", "")
+                    comparison = llm_res.get("comparison", None)
+                except Exception:
+                    answer = {"direct_answer": build_fallback_answer(payload.question, payload.incident_date.isoformat(), legal_era, [source_chunk])}
+                    comparison = None
                 
                 # Citations combine both
                 retrieved = [source_chunk] + target_candidates
         else:
             # STANDARD RETRIEVAL
-            source_act = intent_data.get("source_act")
+            source_act = detected_act or intent_data.get("source_act")
             
-            if not source_act:
-                from core.vector_db import detect_exact_sections
-                exacts = detect_exact_sections(optimized_query)
-                for e in exacts:
-                    if e.get("act"):
-                        source_act = e.get("act")
-                        break
-                        
+            # If section is explicit but act is not, try conversation context
+            if not source_act and detected_section:
+                source_act = intent_data.get("source_act")
+                
             if not source_act and payload.forced_era:
                 source_act = payload.forced_era
                 
-            retrieved = search_legal_corpus(optimized_query, top_k=5, force_act=source_act)
+            # Override optimized query if we have an explicit match that the LLM missed or corrupted
+            search_query = f"{source_act} {detected_section}" if (detected_section and source_act) else optimized_query
+            if not source_act and detected_section:
+                search_query = f"section {detected_section}"
+                
+            retrieved = search_legal_corpus(search_query, top_k=5, force_act=source_act)
             if not retrieved:
                 answer = {"direct_answer": "I couldn't find a sufficiently relevant source in the available legal documents."}
                 comparison = None
@@ -154,7 +179,7 @@ async def ask_legal_question(
                     answer = llm_res.get("answer", "")
                     comparison = llm_res.get("comparison", None)
                 except Exception:
-                    answer = build_fallback_answer(payload.question, payload.incident_date.isoformat(), legal_era, retrieved)
+                    answer = {"direct_answer": build_fallback_answer(payload.question, payload.incident_date.isoformat(), legal_era, retrieved)}
                     comparison = None
 
     except Exception as exc:

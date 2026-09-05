@@ -7,14 +7,31 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.chat_history (
+create table if not exists public.query_history (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   question text not null,
-  answer text not null,
+  answer jsonb,
   incident_date date not null,
   legal_era text not null check (legal_era in ('IPC', 'BNS')),
   citations jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.conversations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  role text not null check (role in ('user', 'assistant', 'system')),
+  content jsonb not null,
   created_at timestamptz not null default now()
 );
 
@@ -29,7 +46,9 @@ create table if not exists public.section_mappings (
 );
 
 alter table public.profiles enable row level security;
-alter table public.chat_history enable row level security;
+alter table public.query_history enable row level security;
+alter table public.conversations enable row level security;
+alter table public.messages enable row level security;
 alter table public.section_mappings enable row level security;
 
 drop policy if exists "Users can read own profile" on public.profiles;
@@ -37,16 +56,28 @@ create policy "Users can read own profile"
 on public.profiles for select to authenticated
 using ((select auth.uid()) = id);
 
-drop policy if exists "Users can read own history" on public.chat_history;
+drop policy if exists "Users can read own history" on public.query_history;
 create policy "Users can read own history"
-on public.chat_history for select to authenticated
+on public.query_history for select to authenticated
 using ((select auth.uid()) = user_id);
 
-drop policy if exists "Service role can manage history" on public.chat_history;
+drop policy if exists "Service role can manage history" on public.query_history;
 create policy "Service role can manage history"
-on public.chat_history for all
+on public.query_history for all
 using (auth.role() = 'service_role')
 with check (auth.role() = 'service_role');
+
+drop policy if exists "Users can manage own conversations" on public.conversations;
+create policy "Users can manage own conversations"
+on public.conversations for all to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can manage own messages" on public.messages;
+create policy "Users can manage own messages"
+on public.messages for all to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
 
 drop policy if exists "Authenticated users can read mappings" on public.section_mappings;
 create policy "Authenticated users can read mappings"
