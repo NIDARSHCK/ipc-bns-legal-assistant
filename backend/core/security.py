@@ -5,7 +5,7 @@ from database.supabase_db import get_user_from_token
 def authenticated_user(authorization: Optional[str]) -> Optional[dict]:
     token = None
 
-    if authorization and authorization.lower().startswith("bearer "):
+    if authorization and isinstance(authorization, str) and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", 1)[1]
 
     return get_user_from_token(token) if token else None

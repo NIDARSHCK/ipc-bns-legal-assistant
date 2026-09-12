@@ -3,8 +3,9 @@ from typing import Optional, Any
 from fastapi import APIRouter, Header
 from pydantic import BaseModel
 
+import json
 from core.security import authenticated_user
-from database.supabase_db import save_query, create_conversation, save_message
+from database.supabase_db import save_query, create_conversation, save_message, get_conversation_messages
 from core.llm_handler import analyze_query_intent, build_legal_answer, build_comparison_answer
 from core.vector_db import search_legal_corpus, semantic_text_search
 
@@ -47,6 +48,36 @@ def build_fallback_answer(question: str, incident_date: str, legal_era: str, ret
         "Note: This local answer was generated without live LLM/Pinecone credentials."
     )
 
+def normalize_comparison_data(
+    comp: Optional[dict],
+    default_source_act: Optional[str] = None,
+    default_target_act: Optional[str] = None,
+) -> Optional[dict]:
+    if not comp or not isinstance(comp, dict):
+        return comp
+
+    source_act = str(comp.get("source_act") or default_source_act or "").strip().upper()
+    target_act = str(comp.get("target_act") or default_target_act or "").strip().upper()
+
+    source_data = comp.get("source")
+    target_data = comp.get("target")
+
+    # If source_act == "IPC" and source exists and ipc is missing, assign source to ipc
+    if source_act == "IPC" and source_data and "ipc" not in comp:
+        comp["ipc"] = source_data
+    # If source_act == "BNS" and source exists and bns is missing, assign source to bns
+    elif source_act == "BNS" and source_data and "bns" not in comp:
+        comp["bns"] = source_data
+
+    # If target_act == "IPC" and target exists and ipc is missing, assign target to ipc
+    if target_act == "IPC" and target_data and "ipc" not in comp:
+        comp["ipc"] = target_data
+    # If target_act == "BNS" and target exists and bns is missing, assign target to bns
+    elif target_act == "BNS" and target_data and "bns" not in comp:
+        comp["bns"] = target_data
+
+    return comp
+
 @router.post("/chat", response_model=AskResponse)
 async def ask_legal_question(
     payload: AskRequest,
@@ -58,6 +89,19 @@ async def ask_legal_question(
     if user and not conversation_id:
         title = payload.question[:40] + ("..." if len(payload.question) > 40 else "")
         conversation_id = create_conversation(user["id"], title)
+
+    # Hydrate conversation from database if empty/missing and conversation_id exists for authenticated user
+    conversation = payload.conversation or []
+    if user and conversation_id and not conversation:
+        db_messages = get_conversation_messages(user["id"], conversation_id)
+        if db_messages:
+            conversation = [
+                {
+                    "role": m.get("role", "user"),
+                    "content": json.dumps(m.get("content")) if isinstance(m.get("content"), dict) else str(m.get("content", ""))
+                }
+                for m in db_messages
+            ]
         
     if user and conversation_id:
         save_message(user["id"], conversation_id, "user", payload.question)
@@ -85,7 +129,7 @@ async def ask_legal_question(
     
     # 2. LLM Intent Analysis
     try:
-        intent_data = await analyze_query_intent(payload.question, payload.conversation)
+        intent_data = await analyze_query_intent(payload.question, conversation)
     except Exception as e:
         print(f"Warning: Intent analysis failed: {e}")
         intent_data = {}
@@ -108,6 +152,23 @@ async def ask_legal_question(
             citations=[], comparison=None, history_id=None, conversation_id=conversation_id, query=payload.question,
             expanded_query=optimized_query,
             disclaimer="This information is for general legal information and is not a substitute for professional legal advice."
+        )
+
+    if intent == "unsupported":
+        answer = {
+            "direct_answer": "I can only assist with Indian criminal law questions, specifically the Indian Penal Code (IPC) and Bharatiya Nyaya Sanhita (BNS).",
+            "relevant_law": "N/A",
+            "what_it_means": "The question asked is outside the scope of Indian criminal law assistance.",
+            "how_it_relates": "N/A"
+        }
+        if user and conversation_id:
+            save_message(user["id"], conversation_id, "assistant", answer)
+
+        return AskResponse(
+            answer=answer, intent=intent, legal_era=legal_era, namespace=namespace,
+            citations=[], comparison=None, history_id=None, conversation_id=conversation_id, query=payload.question,
+            expanded_query=optimized_query,
+            disclaimer="This system is dedicated exclusively to Indian criminal law (IPC and BNS)."
         )
 
     try:
@@ -140,32 +201,83 @@ async def ask_legal_question(
                 # 2. Semantic Search on Target (Bypassing exact filters)
                 target_candidates = semantic_text_search(source_text_for_search, target_namespace, top_k=5)
                 
+                # If target section was explicitly mentioned in query, ensure it is included in target candidates
+                target_exact_sec = None
+                for e in exact_matches:
+                    if e.get("act") == target_act and e.get("section"):
+                        target_exact_sec = e.get("section")
+                        break
+                if target_exact_sec:
+                    has_exact = any(c.get("section") == target_exact_sec for c in target_candidates)
+                    if not has_exact:
+                        explicit_target = search_legal_corpus(f"{target_act} {target_exact_sec}", top_k=1, force_act=target_act)
+                        if explicit_target:
+                            target_candidates = explicit_target + target_candidates
+
                 # 3. LLM Comparison
                 try:
-                    llm_res = await build_comparison_answer(payload.question, source_chunk, target_candidates, payload.conversation)
+                    llm_res = await build_comparison_answer(payload.question, source_chunk, target_candidates, conversation)
                     answer = llm_res.get("answer", "")
-                    comparison = llm_res.get("comparison", None)
+                    comparison = normalize_comparison_data(
+                        llm_res.get("comparison", None),
+                        default_source_act=source_act,
+                        default_target_act=target_act,
+                    )
                 except Exception:
                     answer = {"direct_answer": build_fallback_answer(payload.question, payload.incident_date.isoformat(), legal_era, [source_chunk])}
                     comparison = None
-                
+
                 # Citations combine both
                 retrieved = [source_chunk] + target_candidates
         else:
             # STANDARD RETRIEVAL
-            source_act = detected_act or intent_data.get("source_act")
-            
-            # If section is explicit but act is not, try conversation context
-            if not source_act and detected_section:
+            source_act = detected_act
+
+            # 1. Determine explicit Act selection ONLY from the ORIGINAL USER QUESTION
+            if not source_act:
+                q_upper = payload.question.upper()
+                if "IPC" in q_upper and "BNS" not in q_upper:
+                    source_act = "IPC"
+                elif "BNS" in q_upper and "IPC" not in q_upper:
+                    source_act = "BNS"
+
+            # 2. Inherit section & Act from conversation context (intent_data) if not explicitly in current question
+            effective_section = detected_section
+            if not effective_section and intent_data.get("source_section"):
+                effective_section = intent_data.get("source_section")
+
+            if not source_act and intent_data.get("source_act"):
                 source_act = intent_data.get("source_act")
-                
+
             if not source_act and payload.forced_era:
                 source_act = payload.forced_era
-                
-            # Override optimized query if we have an explicit match that the LLM missed or corrupted
-            search_query = f"{source_act} {detected_section}" if (detected_section and source_act) else optimized_query
-            if not source_act and detected_section:
-                search_query = f"section {detected_section}"
+
+            # If effective section exists but source_act remains unspecified, fallback to legal_era
+            if not source_act and effective_section:
+                source_act = legal_era
+
+            # Construct search query
+            search_query = f"{source_act} {effective_section}" if (effective_section and source_act) else (f"section {effective_section}" if effective_section else optimized_query)
+
+            # Deterministic defense for natural language queries (no section in question or context)
+            if not effective_section:
+                import re
+                # 1. Prevent vector_db from falsely locking the Act based on LLM-injected words
+                if not source_act:
+                    search_query = re.sub(r'\b(IPC|BNS)\b', '', search_query, flags=re.IGNORECASE).strip()
+                # 2. Strip optimizer-injected section labels and standalone section numbers
+                search_query = re.sub(r'(?i)\bsec(?:tion)?\.?\s*\d+[A-Za-z()/-]*\b', '', search_query)
+                search_query = re.sub(r'(?i)\b(?:IPC|BNS)\s*\d+[A-Za-z()/-]*\b', '', search_query)
+                search_query = re.sub(r'(?<![₹$€£\w])\b\d{1,3}[A-Za-z]?\b(?!\s*(?:rupees|rs|k|lakh|crore|years|months|days|percent|%))', '', search_query, flags=re.IGNORECASE)
+                search_query = re.sub(r'\s+', ' ', search_query).strip()
+
+                # 3. For punishment queries without explicit section, ensure punishment concepts are preserved
+                q_lower = payload.question.lower()
+                if any(w in q_lower for w in ["punishment", "penalty", "imprisonment", "fine", "sentence"]):
+                    if not any(w in search_query.lower() for w in ["punishment", "penalty", "imprisonment"]):
+                        search_query = f"{search_query} punishment penalty imprisonment"
+
+            print(f"[DEBUG chat.py] Original: '{payload.question}' | Effective Section: {effective_section} | Effective Act: {source_act} | Final Search Query: '{search_query}'")
                 
             retrieved = search_legal_corpus(search_query, top_k=5, force_act=source_act)
             if not retrieved:
@@ -174,11 +286,12 @@ async def ask_legal_question(
             else:
                 try:
                     llm_res = await build_legal_answer(
-                        payload.question, payload.incident_date.isoformat(), legal_era, retrieved, payload.conversation
+                        payload.question, payload.incident_date.isoformat(), legal_era, retrieved, conversation
                     )
                     answer = llm_res.get("answer", "")
-                    comparison = llm_res.get("comparison", None)
-                except Exception:
+                    comparison = normalize_comparison_data(llm_res.get("comparison", None))
+                except Exception as exc:
+                    print(f"[ERROR chat.py] build_legal_answer failed: {exc}")
                     answer = {"direct_answer": build_fallback_answer(payload.question, payload.incident_date.isoformat(), legal_era, retrieved)}
                     comparison = None
 

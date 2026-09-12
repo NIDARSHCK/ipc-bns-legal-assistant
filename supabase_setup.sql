@@ -117,7 +117,3 @@ for each row execute function public.handle_new_user();
 
 -- After creating your own account, make it admin by replacing the email below.
 -- update public.profiles set role = 'admin' where email = 'your-email@example.com';
-
--- Seed the top-50 mapping rows with:
--- cd backend
--- python seed_mappings.py

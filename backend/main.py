@@ -1,10 +1,15 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BACKEND_DIR / ".env")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import get_allowed_origins
 from api.chat import router as chat_router
 from api.history import router as history_router
-from api.mapping import router as mapping_router
 from api.auth import router as auth_router
 
 app = FastAPI(
@@ -30,5 +35,4 @@ def health():
 
 app.include_router(chat_router)
 app.include_router(history_router)
-app.include_router(mapping_router)
 app.include_router(auth_router)

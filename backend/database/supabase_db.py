@@ -3,10 +3,12 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
+from pathlib import Path
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
-load_dotenv()
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(dotenv_path=BACKEND_DIR / ".env")
 
 LOCAL_HISTORY: list[dict] = []
 
@@ -26,7 +28,7 @@ def get_user_from_token(token: Optional[str]) -> Optional[dict]:
     if not token:
         return None
     if token == "demo-token":
-        return {"id": "demo-user", "email": "demo@local.test", "role": "admin"}
+        return {"id": "148f99d2-d12c-4128-8a5c-ac195e67b718", "email": "demo@local.test", "role": "admin"}
     client = supabase()
     if not client:
         return None

@@ -45,14 +45,7 @@ Open `http://127.0.0.1:5173`.
 4. Add these frontend variables on Vercel or `frontend/.env` locally:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_PUBLISHABLE_KEY`
-5. Seed mapping rows:
-
-```bash
-cd backend
-python seed_mappings.py
-```
-
-6. Create your first user from the app, then optionally mark it admin:
+5. Create your first user from the app, then optionally mark it admin:
 
 ```sql
 update public.profiles set role = 'admin' where email = 'your-email@example.com';
@@ -64,8 +57,8 @@ Create or let the script create a Pinecone integrated embedding index. Then inge
 
 ```bash
 cd backend
-python ingest.py --file "C:\Users\lenovo\Downloads\a202345.pdf" --act bns
-python ingest.py --file "C:\Users\lenovo\Downloads\repealedfileopen.pdf" --act ipc
+python scripts/ingest_v2.py --file "C:\Users\lenovo\Downloads\a202345.pdf" --act bns --namespace bns_v2
+python scripts/ingest_v2.py --file "C:\Users\lenovo\Downloads\repealedfileopen.pdf" --act ipc --namespace ipc_v2
 ```
 
 Required variables:
@@ -107,5 +100,4 @@ Use comma-separated origins for preview or local origins.
 1. Sign up or use demo mode.
 2. Ask: `What is the BNS equivalent of IPC 420 cheating?`
 3. Confirm answer, legal era, source citations, and saved history.
-4. Open Section Mapping and search `murder`, `420`, `theft`, and `defamation`.
-5. Confirm backend `/health`, `/mapping`, and `/chat` work from the deployed frontend origin.
+4. Confirm backend `/health` and `/chat` work from the deployed frontend origin.

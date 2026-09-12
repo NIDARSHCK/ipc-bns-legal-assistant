@@ -52,10 +52,6 @@ export async function askLegalAssistant({
   });
 }
 
-export async function fetchMappings() {
-  const data = await fetchWithJson(`${API_BASE_URL}/mapping`);
-  return data.items || [];
-}
 
 export async function fetchCurrentUser(accessToken) {
   return fetchWithJson(`${API_BASE_URL}/me`, {

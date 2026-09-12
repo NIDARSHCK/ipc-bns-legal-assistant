@@ -20,6 +20,13 @@ INTENT_SYSTEM_PROMPT = dedent(
     
     If it is a legal_question, legal_situation, or comparison, generate an "optimized_query" containing 4-8 highly relevant keywords.
     
+    RULES FOR optimized_query:
+    - Do NOT invent, infer, or inject section numbers or Act names (e.g. "302", "378", "IPC", "BNS") unless the user EXPLICITLY mentioned that specific section or Act in their question.
+    - For natural-language or scenario-based questions, use ONLY descriptive conceptual legal keywords.
+      * GOOD: "intentional killing murder punishment unlawful homicide"
+      * BAD: "Section 302 murder" (Do NOT infer historical IPC sections if the user did not state them)
+    - If the user asks specifically about punishment or penalties (e.g., "What is the punishment for theft?"), ensure the optimized_query includes punishment-oriented terms (e.g., "theft punishment penalty imprisonment fine") so semantic search matches penalty provisions rather than pure definitions.
+
     For ANY query mentioning a specific Act (IPC or BNS) and/or section, extract them into source_act and source_section.
     (e.g., "IPC Section 420" -> source_act: "IPC", source_section: "420")
     (e.g., "BNS 103" -> source_act: "BNS", source_section: "103")
@@ -27,7 +34,7 @@ INTENT_SYSTEM_PROMPT = dedent(
     
     If intent is "comparison", you MUST identify the target Act as well.
     (e.g., "BNS equivalent of IPC 302" -> source_act: "IPC", source_section: "302", target_act: "BNS")
-    (e.g., "How has theft changed from IPC to BNS?" -> source_act: null, source_section: null, target_act: null, optimized_query: "theft IPC BNS transition")
+    (e.g., "How has theft changed from IPC to BNS?" -> source_act: null, source_section: null, target_act: null, optimized_query: "theft legal transition comparison")
     
     Return ONLY a JSON object with this exact schema:
     {
@@ -48,46 +55,49 @@ LEGAL_ANSWER_SYSTEM_PROMPT = dedent(
     Provide a CLEAN, CRISP, AND PROFESSIONAL EXECUTIVE SUMMARY format.
     
     Answer ONLY from the retrieved context and conversation history. 
-    If the context is insufficient, say EXACTLY: "I couldn't find a sufficiently relevant source in the available legal documents."
+    If the context is insufficient, return the required JSON object using the exact schema. Set answer.direct_answer EXACTLY to: "I couldn't find a sufficiently relevant source in the available legal documents." and leave all other fields empty or null.
     NEVER invent section numbers, punishments, Gazette pages, case law, or citations.
     Every legal claim must be supported by retrieved evidence.
     
     FORMATTING RULES:
-    1. Direct Answer: Provide a crisp 1-2 sentence executive summary of the law.
-    2. What It Means: Use bullet points (-) for key takeaways and clauses. Avoid huge walls of text.
-    3. How It Relates: Directly link the law to the user's situation in clear language.
-    4. Important Notes: Highlight exceptions clearly.
+    1. Direct Answer: Provide a crisp 1-2 sentence executive summary directly answering the question.
+    2. Relevant Law: State the specific Act, Section number, and official Title.
+    3. What It Means: Plain-language explanation for a non-lawyer (use bullet points '-').
+    4. Important Elements: List the essential conditions/ingredients (actus reus, mens rea, property type, circumstances) strictly supported by retrieved text (or null).
+    5. Punishment: State the exact punishment terms (imprisonment term, fine, mandatory minimums, alternative sentencing) explicitly mentioned in context (or null).
+    6. Clauses / Subsections: Break down actual numbered subsections/clauses (e.g., '(1)', '(2)', Explanations) individually. NEVER invent a subsection or clause number (or null).
+    7. Exceptions / Provisos: Include statutory exceptions or provisos ONLY if actually found in retrieved evidence. If none exist in the text, set to null. NEVER invent exceptions.
+    8. Practical Example: Provide a clear, realistic scenario applying the legal provisions if helpful. Do NOT make unsupported legal claims. Set to null if not useful.
+    9. How It Relates: Directly link the law to the user's question or facts.
+    10. Important Notes: Mention legal limits, requirements (e.g. public way, consent), or transition significance (or null).
+    11. Related Provisions: Mention only provisions that are genuinely relevant from the retrieved context (or null).
     
     Return ONLY a JSON object with this exact schema:
     {
         "answer": {
-            "direct_answer": "Crisp executive summary (1-2 sentences).",
+            "direct_answer": "Crisp executive summary directly answering the question (1-2 sentences).",
             "relevant_law": "Act, Section, Title.",
-            "what_it_means": "Detailed Explanation (use bullet points if needed).",
-            "clauses": {"clause_name": "crisp explanation"},
-            "how_it_relates": "Direct connection to the user's facts.",
-            "punishment": "Clear consequences if explicitly supported.",
-            "important_notes": "Exceptions or conditions.",
-            "related_provisions": "Any genuinely relevant other provisions."
+            "what_it_means": "Simple, common-person-friendly explanation (use bullet points - where helpful).",
+            "important_elements": "Essential legal elements/conditions strictly supported by the retrieved text (or null).",
+            "punishment": "Detailed explanation of punishment across different clauses/situations if supported by retrieved text (or null).",
+            "clauses": {"subsection_or_clause_name": "crisp explanation of actual subsection"} (or null),
+            "exceptions_or_provisos": "Actual statutory exceptions or provisos present in retrieved text (or null).",
+            "practical_example": "A realistic, simple illustrative scenario applying the elements (or null).",
+            "how_it_relates": "Direct connection to the user's inquiry or situation.",
+            "important_notes": "Statutory limitations, procedural context, or legal transition notes (or null).",
+            "related_provisions": "Any genuinely relevant other provisions in the retrieved context (or null)."
         },
         "comparison": null  
     }
     
     DO NOT use markdown like ** or ### in the JSON values, but you CAN use '-' for bullet points.
-    
-    If comparison is set or explicitly asked for, use this schema:
-    "comparison": {
-        "ipc": {"section": "number", "offence": "...", "punishment": "... (or null)"},
-        "bns": {"section": "number", "offence": "...", "punishment": "... (or null)"},
-        "summary": "A crisp explanation of what changed between IPC and BNS for this offence."
-    }
     """
 ).strip()
 
 
 async def analyze_query_intent(question: str, conversation: Optional[list[dict]] = None) -> dict:
     api_key = os.getenv("GROQ_API_KEY")
-    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is missing in backend/.env")
         
@@ -168,7 +178,7 @@ async def build_legal_answer(
     conversation: Optional[list[dict]] = None
 ) -> dict:
     api_key = os.getenv("GROQ_API_KEY")
-    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is missing in backend/.env")
 
@@ -242,33 +252,52 @@ COMPARISON_SYSTEM_PROMPT = dedent(
     {
       "answer": {
         "direct_answer": "Crisp 1-2 sentence executive summary of the mapping.",
-        "relevant_law": "State both the Source and Target provisions.",
-        "what_it_means": "Explain the relationship clearly in bullet points (-).",
-        "how_it_relates": "Direct connection to the user's facts (if any)."
+        "relevant_law": "State both the IPC and BNS provisions.",
+        "what_it_means": "Explain the transition and relationship clearly.",
+        "how_it_relates": "Direct connection to the user's inquiry."
       },
       "comparison": {
+        "relationship": "One of the allowed relationships",
+        "ipc": {
+          "section": "IPC section number (or 'N/A')",
+          "offence": "IPC provision title / offence name",
+          "purpose": "Core purpose or scope of the IPC provision",
+          "punishment": "Punishment prescribed under IPC (or 'N/A')",
+          "clauses": "Key clauses or subsections under IPC (or 'None')",
+          "exceptions": "Exceptions or provisos under IPC (or 'None')"
+        },
+        "bns": {
+          "section": "BNS section number (or 'N/A')",
+          "offence": "BNS provision title / offence name",
+          "purpose": "Core purpose or scope of the BNS provision",
+          "punishment": "Punishment prescribed under BNS (or 'N/A')",
+          "clauses": "Key clauses or subsections under BNS (or 'None')",
+          "exceptions": "Exceptions or provisos under BNS (or 'None')"
+        },
+        "what_stayed_the_same": "Aspects, definitions, or penalties that remain unchanged.",
+        "what_changed": "Specific changes, additions, deletions, or modifications.",
+        "practical_significance": "Real-world implications for citizens, FIR filing, and judicial proceedings.",
+        "summary": "Crisp 1-2 sentence overall summary of the transition.",
         "source_act": "IPC or BNS",
         "source_section": "section number",
-        "source_title": "title of source",
         "target_act": "IPC or BNS",
-        "target_section": "section number (or null if none found)",
-        "target_title": "title of target (or null if none found)",
-        "relationship": "One of the allowed relationships",
-        "summary": "Crisp explanation of what changed or if it was retained exactly.",
-        "changes": "Key differences, additions, or omissions."
+        "target_section": "section number"
       }
     }
+
+    DO NOT use markdown formatting like ** or ### in JSON string values.
     """
 ).strip()
+
 
 async def build_comparison_answer(
     question: str,
     source_res: dict,
     target_candidates: list[dict],
-    conversation: list[dict] = None
+    conversation: Optional[list[dict]] = None
 ) -> dict:
     api_key = os.getenv("GROQ_API_KEY")
-    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is missing in backend/.env")
 
