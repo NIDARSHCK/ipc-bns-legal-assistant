@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { AlertCircle, Scale, Mail, Send, KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { supabase } from "../services/supabase";
 
-export default function ForgotPassword({ navigateTo }) {
-  const [step, setStep] = useState(1);
+export default function ForgotPassword({ navigateTo, initialStep = 1 }) {
+  const [step, setStep] = useState(initialStep);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", "", "", ""]);
   const [newPassword, setNewPassword] = useState("");
@@ -24,6 +24,12 @@ export default function ForgotPassword({ navigateTo }) {
       setStep(3);
     }
   }, []);
+
+  useEffect(() => {
+    if (initialStep) {
+      setStep(initialStep);
+    }
+  }, [initialStep]);
 
   useEffect(() => {
     let timer;

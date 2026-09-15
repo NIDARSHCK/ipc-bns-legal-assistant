@@ -97,8 +97,7 @@ export default function App() {
     // Check URL hash for Supabase password recovery or email verification on load
     const hash = window.location.hash;
     if (hash && hash.includes("type=recovery")) {
-      setActiveView("forgotPassword");
-      // Note: Since we combined the flow into ForgotPassword, we'll route there and let it handle the state.
+      setActiveView("resetPassword");
     } else if (hash && hash.includes("type=signup")) {
       window.location.hash = "";
       setActiveView("chat");
@@ -333,6 +332,7 @@ export default function App() {
           />
         )}
         {activeView === "forgotPassword" && <ForgotPassword navigateTo={setActiveView} />}
+        {activeView === "resetPassword" && <ForgotPassword navigateTo={setActiveView} initialStep={3} />}
         {activeView === "verifyEmail" && <VerifyEmail navigateTo={setActiveView} email={email} />}
 
         {activeView === "chat" && (
