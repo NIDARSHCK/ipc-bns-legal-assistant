@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { AlertCircle, Scale, Mail, Send, KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { supabase } from "../services/supabase";
 
-export default function ForgotPassword({ navigateTo, initialStep = 1 }) {
+export default function ForgotPassword({ navigateTo, initialStep = 1, onRecoveryStarted }) {
   const [step, setStep] = useState(initialStep);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", "", "", ""]);
@@ -100,6 +100,12 @@ export default function ForgotPassword({ navigateTo, initialStep = 1 }) {
         setError("Invalid verification code.");
       }
     } else if (!error) {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("isPasswordRecovery", "true");
+      }
+      if (onRecoveryStarted) {
+        onRecoveryStarted();
+      }
       setMessage("Code verified successfully! You may now set a new password.");
       setStep(3);
     } else {
@@ -125,6 +131,9 @@ export default function ForgotPassword({ navigateTo, initialStep = 1 }) {
     if (error) {
       setError(error.message);
     } else {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("isPasswordRecovery");
+      }
       setMessage("Password reset successfully.");
       setStep(4);
       setOtp(["", "", "", "", "", "", "", ""]);
@@ -335,7 +344,7 @@ export default function ForgotPassword({ navigateTo, initialStep = 1 }) {
             )}
           </div>
 
-          {(step === 1 || step === 2) && (
+          {(step === 1 || step === 2 || step === 3) && (
             <div style={{ textAlign: "center", borderTop: "1px solid var(--border-color)", paddingTop: "24px", margin: "0 24px 24px" }}>
               <button
                 className="btn-ghost"

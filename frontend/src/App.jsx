@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, Check, Menu, Scale } from "lucide-react";
 
 import {
@@ -38,7 +38,29 @@ function parseIncidentDate(value) {
 }
 
 export default function App() {
-  const [activeView, setActiveView] = useState("home");
+  const [verifyingEmail, setVerifyingEmail] = useState(() => {
+    return Boolean(typeof window !== "undefined" && window.location.hash && window.location.hash.includes("type=signup"));
+  });
+
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash;
+      if (hash && hash.includes("type=recovery")) return true;
+      if (window.sessionStorage.getItem("isPasswordRecovery") === "true") return true;
+    }
+    return false;
+  });
+
+  const [activeView, setActiveView] = useState(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash;
+      if (hash && hash.includes("type=recovery")) return "resetPassword";
+      if (hash && hash.includes("type=signup")) return "chat";
+      if (window.sessionStorage.getItem("isPasswordRecovery") === "true") return "resetPassword";
+    }
+    return "home";
+  });
+  const signupConfirmedRef = useRef(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
 
@@ -79,7 +101,8 @@ export default function App() {
 
   const parsedDate = useMemo(() => parseIncidentDate(incidentDateText), [incidentDateText]);
   const legalEra = parsedDate.date && parsedDate.date >= transitionDate ? "BNS" : parsedDate.date ? "IPC" : "Needs date";
-  const isSignedIn = Boolean(session?.access_token);
+  const isRecoveryActive = isPasswordRecovery || activeView === "resetPassword";
+  const isSignedIn = Boolean(session?.access_token) && !isRecoveryActive;
 
   useEffect(() => {
     // Startup warning for missing env vars on deployment
@@ -94,22 +117,43 @@ export default function App() {
       return;
     }
 
-    // Check URL hash for Supabase password recovery or email verification on load
+    // Check URL hash for Supabase password recovery on load
     const hash = window.location.hash;
     if (hash && hash.includes("type=recovery")) {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("isPasswordRecovery", "true");
+      }
+      setIsPasswordRecovery(true);
       setActiveView("resetPassword");
-    } else if (hash && hash.includes("type=signup")) {
-      window.location.hash = "";
-      setActiveView("chat");
     }
 
+    const processSession = (sess) => {
+      setSession(sess);
+      if (sess && (window.location.hash.includes("type=signup") || verifyingEmail)) {
+        if (!signupConfirmedRef.current) {
+          signupConfirmedRef.current = true;
+          window.history.replaceState(null, "", window.location.pathname);
+          setTimeout(() => {
+            setVerifyingEmail(false);
+            setActiveView("chat");
+            handleNewChat();
+            setToast("Email verified successfully!");
+          }, 1200);
+        }
+      }
+    };
+
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+      processSession(data.session);
     });
 
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      setSession(nextSession);
+      processSession(nextSession);
       if (event === "PASSWORD_RECOVERY") {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem("isPasswordRecovery", "true");
+        }
+        setIsPasswordRecovery(true);
         setActiveView("resetPassword");
       }
       if (!nextSession) {
@@ -121,18 +165,25 @@ export default function App() {
     });
 
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [verifyingEmail]);
 
   useEffect(() => {
-    if (!session?.access_token) return;
+    if (!session?.access_token || isRecoveryActive) return;
     refreshSessionData(session.access_token);
-  }, [session?.access_token]);
+  }, [session?.access_token, isRecoveryActive]);
 
   useEffect(() => {
-    if (activeView === "chat" && !isSignedIn) {
+    if (isRecoveryActive) {
+      setHistory([]);
+      setProfile(null);
+    }
+  }, [isRecoveryActive]);
+
+  useEffect(() => {
+    if (activeView === "chat" && !isSignedIn && !verifyingEmail) {
       setActiveView("signin");
     }
-  }, [activeView, isSignedIn]);
+  }, [activeView, isSignedIn, verifyingEmail]);
 
   async function refreshSessionData(accessToken) {
     try {
@@ -169,7 +220,7 @@ export default function App() {
         : supabase.auth.signUp({ 
             email, 
             password, 
-            options: { emailRedirectTo: `${window.location.origin}/auth/callback` } 
+            options: { emailRedirectTo: `${window.location.origin}/` }
           });
     const { error: authError } = await action;
     if (authError) {
@@ -185,7 +236,21 @@ export default function App() {
     }
   }
 
+  const handleNavigateTo = (view) => {
+    if (view === "signin" || view === "home") {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("isPasswordRecovery");
+      }
+      setIsPasswordRecovery(false);
+    }
+    setActiveView(view);
+  };
+
   async function handleSignOut() {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem("isPasswordRecovery");
+    }
+    setIsPasswordRecovery(false);
     if (supabase) await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
@@ -284,13 +349,42 @@ export default function App() {
     }
   }
 
+  const onRecoveryStarted = () => {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("isPasswordRecovery", "true");
+    }
+    setIsPasswordRecovery(true);
+    setActiveView("resetPassword");
+    setHistory([]);
+    setProfile(null);
+    setActiveConversationId(null);
+    setMessages([]);
+  };
+
+  if (isRecoveryActive) {
+    return (
+      <div className="app-layout" style={{ background: "var(--bg-primary)" }}>
+        <ForgotPassword
+          navigateTo={handleNavigateTo}
+          initialStep={3}
+          onRecoveryStarted={onRecoveryStarted}
+        />
+        {toast && (
+          <div style={{ position: "fixed", bottom: "24px", right: "24px", background: "var(--text-primary)", color: "var(--bg-primary)", padding: "12px 24px", borderRadius: "8px", zIndex: 100, boxShadow: "var(--shadow-lg)", cursor: "pointer" }} onClick={() => setToast("")}>
+            {toast}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="app-layout">
-      <Sidebar 
-        activeView={activeView} 
-        setActiveView={setActiveView} 
-        mobileOpen={mobileOpen} 
-        setMobileOpen={setMobileOpen} 
+      <Sidebar
+        activeView={activeView}
+        setActiveView={handleNavigateTo}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
         isSignedIn={isSignedIn}
         handleSignOut={handleSignOut}
         profile={profile}
@@ -312,7 +406,7 @@ export default function App() {
           </button>
         </div>
 
-        {activeView === "home" && <Home onStart={() => setActiveView(isSignedIn ? "chat" : "signin")} />}
+        {activeView === "home" && <Home onStart={() => handleNavigateTo(isSignedIn ? "chat" : "signin")} />}
         {activeView === "about" && <About />}
         
         {activeView === "signin" && (
@@ -320,7 +414,7 @@ export default function App() {
             email={email} setEmail={setEmail} 
             password={password} setPassword={setPassword} 
             handleAuth={handleAuth} authMessage={authMessage} 
-            navigateTo={setActiveView}
+            navigateTo={handleNavigateTo}
           />
         )}
         {activeView === "signup" && (
@@ -328,12 +422,23 @@ export default function App() {
             email={email} setEmail={setEmail} 
             password={password} setPassword={setPassword} 
             handleAuth={handleAuth} authMessage={authMessage} 
-            navigateTo={setActiveView}
+            navigateTo={handleNavigateTo}
           />
         )}
-        {activeView === "forgotPassword" && <ForgotPassword navigateTo={setActiveView} />}
-        {activeView === "resetPassword" && <ForgotPassword navigateTo={setActiveView} initialStep={3} />}
-        {activeView === "verifyEmail" && <VerifyEmail navigateTo={setActiveView} email={email} />}
+        {activeView === "forgotPassword" && (
+          <ForgotPassword
+            navigateTo={handleNavigateTo}
+            onRecoveryStarted={onRecoveryStarted}
+          />
+        )}
+        {activeView === "resetPassword" && (
+          <ForgotPassword
+            navigateTo={handleNavigateTo}
+            initialStep={3}
+            onRecoveryStarted={onRecoveryStarted}
+          />
+        )}
+        {activeView === "verifyEmail" && <VerifyEmail navigateTo={handleNavigateTo} email={email} />}
 
         {activeView === "chat" && (
           <Chat 
@@ -357,6 +462,14 @@ export default function App() {
         )}
 
         {/* Global Modals */}
+        {verifyingEmail && (
+          <Modal icon={<Check size={28} color="var(--accent-gold)" />} title="Email verified successfully!">
+            <p style={{ textAlign: "center", color: "var(--text-secondary)", marginTop: "8px" }}>
+              Your account has been verified. Redirecting to chat...
+            </p>
+          </Modal>
+        )}
+
         {showTransitionPopup && (
           <Modal icon={<Scale size={24} />} title="Legal Transition Date Detected">
             <p>July 1, 2024 is the IPC to BNS transition date. Choose which legal framework should be used for this query.</p>

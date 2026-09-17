@@ -17,7 +17,7 @@ export default function VerifyEmail({ email }) {
       type: 'signup',
       email: email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo: `${window.location.origin}/`
       }
     });
     if (error) {
